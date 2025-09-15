@@ -1,7 +1,7 @@
 # ff2p-press
 A Powershell script for Windows that uses FFMPEG 2-pass encoding to compress videos to a given size.
 
-This script compresses videos with various video codecs and settings, using ffmpeg with double-pass encoding (with some exceptions, such as with libaom-av1)
+This script compresses videos with various video codecs and settings, using ffmpeg with double-pass encoding.
 The default options (when no extra arguments are given other than the input file and file size) are the video codec libx265 with the medium preset, and the audio codec libopus at 128kbps bitrate or the video's audio bitrate if its lower than the set bitrate.
 Videos will get output to Desktop with the names starting with "compressed_" and ending with the codec used (e.g "_libx265") and preset used (e.g _medium). 
 
