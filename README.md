@@ -10,7 +10,9 @@ Videos will get output to Desktop with the names starting with "compressed_" and
 
 `-s <desired_file_size_in_MiB>` set the target size of the file in mebibytes
 
-Thats it! For advanced settings continue reading and consult the example usages below.
+`-h or -w <desired_resolution>` rescale the output video. EITHER of these are optional, not setting both will not rescale the video, not setting ONE will make the other side automatically scale to keep the aspect ratio of the video (e.g if your input video is 2650 wide x 1440 tall, you can just use -h 1080p to automatically make the resolution 1920x1080, or vice versa). Setting BOTH to values that wont match the original aspect ratio will result in "streched" or "squished" videos (e.g nothing is stopping you from doing -h 500 -w 500 for a 16:9 video), so just set either the width or the height (probably height). Scaling down a video is a good way of increasing the bitrate per frame, especially when the video isnt really meant to be viewed at its original resolution (for example sharing a 1400p video might be wasteful if most people are going to view it on a 720p/1080p display). 
+
+Thats it! For advanced codec settings continue reading and consult the example usages below.
 
 # Codec options/usage tips
 
@@ -68,6 +70,7 @@ Audio Codecs:
 -s 50 -i "C:\Users\mot\Desktop\drive.mp4" -cv libaom-av1    (change the default video codec)
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 10 -cv hevc_nvenc
 -i "C:\Users\mot\Desktop\drive.mp4" -s 30 -cvpreset veryslow -cv libx264    (change the default video codec and use a different preset compatible with the codec)
+-i  "C:\Users\mot\Desktop\drive.mp4" -s 50 -h 1080 -cv hevc_nvenc   (change codec, rescale the video to 1080p. Here since width isnt set it will get automatically set to match the aspect ratio of the video)
 ```
 
 See the "param" block at the top of the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i")

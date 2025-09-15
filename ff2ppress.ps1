@@ -9,6 +9,10 @@ param(
     $videocodec = "libx265", # other available codecs: hevc_nvenc, libaom-av1
     [Alias("cvpreset")]
     $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libaom-av1 - 8 (this is for the "cpu-used" argument)
+    [Alias("h")]
+    $videoheight = -1,
+    [Alias("w")]
+    $videowidth = -1,
 
     [Alias("ca")]
     $audiocodec = "libopus", # other available codecs: acc
@@ -46,9 +50,7 @@ if ($videocodec -eq "libx265"){
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-preset", "$videocodecpreset"
-        "-x265-params", "pass=1",
-        "-an",
-        "-f", "null", "NUL"
+        "-x265-params", "pass=1"
     )
     $ffvideoargsP2 = @(
         "-i", $video,
@@ -77,9 +79,7 @@ if ($videocodec -eq "libx265"){
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-preset", "$videocodecpreset"
-        "-pass", "1",
-        "-an",
-        "-f", "null", "NUL"
+        "-pass", "1"
     )
     $ffvideoargsP2 = @(
         "-i", $video,
@@ -105,8 +105,6 @@ if ($videocodec -eq "libx265"){
         "-b:v", "$videoTargetkbps`k",
         "-pass", "1",
         "-cpu-used", "$videocodecpreset"
-        "-an",
-        "-f", "null", "NUL"
     )
     $ffvideoargsP2 = @(
         "-i", $video,
@@ -119,6 +117,10 @@ if ($videocodec -eq "libx265"){
     Write-Host "Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
 }
+$ffvideonullargsP1 = @(
+    "-an",
+    "-f", "null", "NUL"    
+)
 
 if ($audiocodec -in "libopus", "acc"){
     $ffaudioargs = @(
@@ -130,17 +132,24 @@ if ($audiocodec -in "libopus", "acc"){
     exit
 }
 
-$starttime = Get-Date
-
-if (-not($audiocodec -eq "hevc_nvenc")){
-    #Write-Host "ffmpeg -hide_banner -v warning $($ffvideoargsP1 -join ' ')"
-    Write-Host "=== Start 1st pass ==="
-    & ffmpeg -hide_banner @ffvideoargsP1
+if (($videoheight -ne -1) -or ($videowidth -ne -1)){
+    Write-Host "Rescaling the video to $videowidth`:$videoheight (width:height)"
+    $ffrescaleargs = @(
+        "-vf", "scale=$([int]$videowidth)`:$([int]$videoheight)"
+    )
+} else {
+    $ffrescaleargs = @()
 }
 
-#Write-Host "ffmpeg -hide_banner $($ffvideoargsP2 + $ffaudioargs -join ' ') $env:USERPROFILE\Desktop\compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+$starttime = Get-Date
+
+if (-not($videocodec -eq "hevc_nvenc")){
+    Write-Host "=== Start 1st pass ==="
+    & ffmpeg -hide_banner @ffvideoargsP1 @ffrescaleargs @ffvideonullargsP1
+}
+
 Write-Host "=== Start final pass ==="
-& ffmpeg -hide_banner @ffvideoargsP2 @ffaudioargs "$env:USERPROFILE\Desktop\compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffaudioargs "$env:USERPROFILE\Desktop\compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
