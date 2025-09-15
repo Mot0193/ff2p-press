@@ -89,7 +89,8 @@ if ($videocodec -eq "libx265"){
         "-pass", "2"
     )
 } elseif ($videocodec -eq "libaom-av1"){
-    Write-Host "Warning! Codec libaom-av1 runs very slow, even with the highest speed/`"preset`"."
+    Write-Host "libaom-av1 Info! This codec runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
+    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but its not. This could be just a bug. After the 1st pass is done you may see `"Output file is empty, nothing was encoded`". This shouldnt mean anything, double pass should still work as intended."
     if (-not ($videocodecpreset -in "0","1","2","3","4","5","6","7","8")){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libaom-av1 `"cpu-used`" value, defaulting to cpu-used `"8`" for libaom-av1 (fastest setting)"
         $videocodecpreset = "8"
