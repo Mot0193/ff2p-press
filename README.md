@@ -3,11 +3,13 @@ A Powershell script for Windows that uses FFMPEG 2-pass encoding to compress vid
 
 This script compresses videos with various video codecs and settings, using ffmpeg with double-pass encoding (with some exceptions, such as with libaom-av1)
 The default options (when no extra arguments are given other than the input file and file size) are the video codec libx265 with the medium preset, and the audio codec libopus at 128kbps bitrate or the video's audio bitrate if its lower than the set bitrate.
-Videos will get output to Desktop with the names starting with "compressed_" and ending with the codec used e.g "_libx265".
+Videos will get output to Desktop with the names starting with "compressed_" and ending with the codec used (e.g "_libx265") and preset used (e.g _medium). 
 
 ## Quick usage parameters:
 `-i <path_to_file>` video file input
+
 `-s <desired_file_size_in_MiB>` set the target size of the file in mebibytes
+
 Thats it! For advanced settings continue reading and consult the example usages below.
 
 # Codec options/usage tips
@@ -16,6 +18,7 @@ Thats it! For advanced settings continue reading and consult the example usages 
 This is the default. H265 is a good codec overall, with quality slightly worse than AV1. Presets over medium give diminishing returns for videos that require less compression, though it might make a bigger difference on larger videos that need to get compressed more. But at some point using libaom-av1 with it's fastest preset might be better than a very slow libx265 preset.
 
 libx265 supports these presets: https://x265.readthedocs.io/en/master/presets.html (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
+
 Default preset is "medium"
 
 ## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
@@ -39,7 +42,7 @@ Default preset is "medium"
 This is av1 software encoding. VERY slow, but considered the best. Because of its mind-numbing speed, i consider going under the preset 8 to be brave (this is actually the "cpu-used" argument, not really a "preset").
 But, even at the fastest preset (8) with just one pass, it can achieve great results, even better and faster compared to libx265 at the slow preset. This is just from my very limited testing, though.
 
-libaom-av1 supports these "cpu-used" values as "presets": https://ffmpeg.org/ffmpeg-codecs.html#libaom_002dav1 (0, 1, 2, ... 8) 0 being the slowest while 8 the fastest. For reference, the library defaults to 1.
+libaom-av1 supports these "cpu-used" values as "presets": https://ffmpeg.org/ffmpeg-codecs.html#libaom_002dav1 (0, 1, 2, ... 8), 0 being the slowest while 8 the fastest. For reference, the library defaults to 1.
 
 Default preset is "8"
 
