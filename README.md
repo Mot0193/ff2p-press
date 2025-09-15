@@ -13,16 +13,21 @@ libx265 supports these presets: https://x265.readthedocs.io/en/master/presets.ht
 Default preset is "medium"
 
 ## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
-In general all hardware accelerated codecs provide worse quality than their software (cpu) versions (in this case compared to libx265). But they are A LOT faster even at the highest quality/preset settings, but even at their highest presets they cant usually beat a good softare encoder. 
+In general all hardware accelerated codecs provide worse quality than their software (cpu) versions (in this case compared to libx265). But they are A LOT faster even at the highest quality/preset settings, but even at their highest presets they cant usually beat a good softare encoder.
 For this reason i wouldnt go below the max preset for nvenc, and some options are complately hardcoded with the use of a high quality preset in mind (for example enabling double pass with the full resolution. Normally lower presets might disable this)
+
 hevc_nvenc supports some weird presents, but the main ones are: p1, p2, p3, ... p7. higher values provide higher quality. To see all presets run "ffmpeg -h encoder=hevc_nvenc"
+
 Default preset is "p7"
+
 CBR (Constant bitrate) is also enabled for this codec, as i found better results with more stable file sizes.
 
 ## libaom-av1 (av1)
 This is av1 software encoding. VERY slow, but considered the best. Because of its mind-numbing speed, i consider going under the preset 8 to be brave (this is actually the "cpu-used" argument, not really a "preset").
 But, even at the fastest preset (8) with just one pass, it can achieve great results, even better and faster compared to libx265 at the slow preset. This is just from my very limited testing, though.
+
 libaom-av1 supports these "cpu-used" values as "presets": https://ffmpeg.org/ffmpeg-codecs.html#libaom_002dav1 (0, 1, ... 8) 0 being the slowest while 8 the fastest. For reference, the library defaults to 1.
+
 Default preset is "8"
 
 ## Audio codecs: libopus (opus) / acc
@@ -41,9 +46,11 @@ Audio Codecs:
 - ACC (most compatible)
 - Opus
 
-# Examples of parameter usage 
+# Examples of parameter usage
+```
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 30
 -s 50 -i "C:\Users\mot\Desktop\drive.mp4" -cv libaom-av1
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 10 -cv hevc_nvenc
+```
 
-See the "param" function at the top of the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i")
+See the "param" block at the top of the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i")
