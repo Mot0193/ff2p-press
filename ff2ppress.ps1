@@ -3,7 +3,10 @@ param(
     $video, 
 
     [Alias("s")]
-    $MiBdesiredsize, 
+    $MiBdesiredsize,
+
+    [Alias("o")]
+    $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
 
     [Alias("cv")]
     $videocodec = "libx265", # other available codecs: hevc_nvenc, libaom-av1
@@ -21,7 +24,7 @@ param(
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
 if ($MiBstartingsize -le $MiBdesiredsize){
-    Write-Host "Sorry, target size cant be higher than the video's current size"
+    Write-Host "Error: target size cant be higher than the video's current size"
     exit
 }
 $kbit_desiredsize = $MiBdesiredsize * 8388.608
@@ -115,7 +118,7 @@ if ($videocodec -eq "libx265"){
         "-cpu-used", "$videocodecpreset"
     )
 } else {
-    Write-Host "Unkown/Unavailable video codec. Check the available codecs in readme"
+    Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
 }
 $ffvideonullargsP1 = @(
@@ -129,7 +132,7 @@ if ($audiocodec -in "libopus", "acc"){
         "-b:a", "$audiobitrate`k"
     )
 } else {
-    Write-Host "Unkown/Unavailable audio codec. Check the available codecs in readme"
+    Write-Host "Error: Unkown/Unavailable audio codec. Check the available codecs in readme"
     exit
 }
 
@@ -142,6 +145,17 @@ if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     $ffrescaleargs = @()
 }
 
+$outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+if (!$outputfolder){
+    $finaloutputpath = "$(Split-Path -Path $video)\$outputfilename"
+} elseif (Test-Path -Path $outputfolder) {
+    $finaloutputpath = "$outputfolder\$outputfilename"
+} else {
+    Write-Host "Error: Output folder is invalid or doesnt exist!"
+    exit
+}
+Write-Host "Output file path: $finaloutputpath"
+
 $starttime = Get-Date
 
 if (-not($videocodec -eq "hevc_nvenc")){
@@ -150,7 +164,7 @@ if (-not($videocodec -eq "hevc_nvenc")){
 }
 
 Write-Host "=== Start final pass ==="
-& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffaudioargs "$env:USERPROFILE\Desktop\compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffaudioargs $finaloutputpath
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
