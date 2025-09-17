@@ -9,9 +9,9 @@ param(
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
 
     [Alias("cv")]
-    $videocodec = "libx265", # other available codecs: hevc_nvenc, libaom-av1
+    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx254, libaom-av1
     [Alias("cvpreset")]
-    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libaom-av1 - 8 (this is for the "cpu-used" argument)
+    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libaom-av1 - 8 (this is for the "cpu-used" argument)
     [Alias("h")]
     $videoheight = -1,
     [Alias("w")]
@@ -19,7 +19,9 @@ param(
 
     [Alias("ca")]
     $audiocodec = "libopus", # other available codecs: acc
-    $audiobitrate = "128" # Or the input video's bit rate, whichever is lower
+    $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
+
+    $fancyrename = $true # pass "0" for false when changing this to false. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -145,7 +147,12 @@ if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     $ffrescaleargs = @()
 }
 
-$outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+if ($fancyrename){
+    $outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+} else {
+    $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+}
+
 if (!$outputfolder){
     $finaloutputpath = "$(Split-Path -Path $video)\$outputfilename"
 } elseif (Test-Path -Path $outputfolder) {
@@ -155,6 +162,7 @@ if (!$outputfolder){
     exit
 }
 Write-Host "Output file path: $finaloutputpath"
+Pause
 
 $starttime = Get-Date
 

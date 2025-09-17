@@ -2,7 +2,7 @@
 A Powershell script for Windows that uses FFMPEG 2-pass encoding to compress videos to a given size.
 
 By default, when using the only required `-i` and `-s` arguments, the video codec gets set to libx265 at the medium preset, and the libopus audio codec at 128k bitrate or the input video's audio bitrate, whichevers lower.
-Videos will get output to the same folder as the input video by default, with this naming scheme: `compressed_<targeted_size>mib_<original_video_name>_<codec_used>_<preset_used>`.
+Videos will get output to the same folder as the input video by default, with this naming scheme: `compressed_<targeted_size>mib_<original_video_name>_<codec_used>_<preset_used>`
 
 ## Quick usage parameters:
 `-i <path_to_file>` Video file input
@@ -11,18 +11,18 @@ Videos will get output to the same folder as the input video by default, with th
 
 `-o <folder_path>` Optionally set the output folder for the compressed video. Not setting this will set the output folder to the same as the input video
 
-`-h or -w <desired_resolution>` Rescale the output video. Scaling down a video is a good way of increasing the bitrate per frame, especially when the video isnt really meant to be viewed at its original resolution (for example sharing a 1440p video might be wasteful if most people are going to view it on a 720p/1080p display). EITHER of these are optional, not setting both wont rescale the video, not setting ONE will make the other side automatically scale to keep the aspect ratio of the video (e.g if your input video is 2650 wide x 1440 tall, you can just use -h 1080p to automatically make the resolution 1920x1080, or vice versa). Setting BOTH to values that wont match the original aspect ratio will result in videos with "streched" or "squished" pixels (e.g nothing is stopping you from doing -h 500 -w 500 for a 16:9 video), so just set either the width or the height (probably height).  
+`-h or -w <desired_resolution>` Optionally rescale the output video. Scaling down a video is a good way of increasing the bitrate per frame, especially when the video isnt really meant to be viewed at its original resolution (for example sharing a 1440p video might be wasteful if most people are going to view it on a 720p/1080p display). EITHER of these are optional, not setting both wont rescale the video, not setting ONE will make the other side automatically scale to keep the aspect ratio of the video (e.g if your input video is 2650 wide x 1440 tall, you can just use -h 1080p to automatically make the resolution 1920x1080, or vice versa). Setting BOTH to values that wont match the original aspect ratio will result in videos with "streched" or "squished" pixels (e.g nothing is stopping you from doing -h 500 -w 500 for a 16:9 video), so just set either the width or the height (probably height).  
 
 Thats it! For advanced codec settings continue reading and consult the example usages below.
 
 # Examples of parameter usage
 ```
--i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 30   (compresses input video to the selected size with the default codecs and presets)
--s 50 -i "C:\Users\mot\Desktop\drive.mp4" -cv libaom-av1    (change the default video codec)
--i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 10 -cv hevc_nvenc
+-i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 30    (compresses input video to the selected size with the default codecs and presets)
+-s 50 -i "C:\Users\mot\Desktop\drive.mp4" -cv libaom-av1    (change the default video codec to libaom-av1)
 -i "C:\Users\mot\Desktop\drive.mp4" -s 30 -cvpreset veryslow -cv libx264    (change the default video codec and use a different preset compatible with the codec)
--i  "C:\Users\mot\Desktop\drive.mp4" -s 50 -h 1080 -cv hevc_nvenc   (change codec, rescale the video to 1080p. Here since width isnt set it will get automatically set to match the aspect ratio of the video)
+-i  "C:\Users\mot\Desktop\drive.mp4" -s 50 -h 1080 -cv hevc_nvenc    (change codec, rescale the video to 1080p. Here since only the height is set, the width will automatically adjust to match the aspect ratio of the video)
 -i "C:\Users\mot\Desktop\Test\NieR_Automata_2025.08.21_-_20.07.22.02.DVR.mp4" -s 25 -cv hevc_nvenc -o "C:\Users\mot\Desktop"    (change the output directory to desktop)
+-i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 16.4 -fancyrename 0    (disable fancy rename. Files will just be named `compressed_<original_video_name>`)
 ```
 
 See the "param" block at the top of the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i")
@@ -62,7 +62,7 @@ libaom-av1 supports these "cpu-used" values as "presets": https://ffmpeg.org/ffm
 Default preset is "8"
 
 ## Audio codecs: libopus (opus) / acc
-The default is libopus, but if youre unsatisfied with how it sounds try ACC. From what i read opus does great at medium bitrates (64k, 128, 192k), but at very low bitrates you might want to try ACC. At high bitrates the difference between codecs is very minor, hence why the default codec is libopus.
+The default is libopus with 128k bitrate (or the input video's, if its lower). If youre unsatisfied with how it sounds try ACC. From what i read opus does great at medium bitrates (64k, 128, 192k), but at very low bitrates you might want to try ACC. At high bitrates the difference between codecs is very minor.
 
 # Codec compatibility notice
 
