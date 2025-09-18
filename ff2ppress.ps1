@@ -26,27 +26,41 @@ param(
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
 if ($MiBstartingsize -le $MiBdesiredsize){
-    Write-Host "Error: target size cant be higher than the video's current size"
+    Write-Host "Error: target size cant be higher than the video's current size ($MiBstartingsize)"
     exit
 }
+$player = New-Object -ComObject WMPlayer.OCX
+$duration = [math]::Round($player.newMedia($video).duration)
+
 $kbit_desiredsize = $MiBdesiredsize * 8388.608
 $kbps_startingaudioBitrate = [math]::Round([int](ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000)
 
-if ($kbps_startingaudioBitrate -le [int]$audiobitrate){
+if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudioBitrate){
     Write-Host "Audio bitrate of the given video is lower than the target bitrate. Using $kbps_startingaudioBitrate`kbps instead of $audiobitrate`kbps"
     $audiobitrate = $kbps_startingaudioBitrate
 }
 
-$player = New-Object -ComObject WMPlayer.OCX
-$duration = [math]::Round($player.newMedia($video).duration)
+$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
+if (($kbit_audiosize / $kbit_desiredsize) -gt 0.2){
+    Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
+    # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
+    $audiobitrate = 0.2 * $kbit_desiredsize / $duration
+    $kbit_audiosize = [int]$audiobitrate * $duration
+}
+
 
 Write-Host "Video duration (sec): $duration"
 Write-Host "Video starting size (MiB): $MiBstartingsize"
-Write-Host "Initial target bitrate (kib): $($kbit_desiredsize / $duration)"
+Write-Host "=== === ==="
+Write-Host "Target file size (kbit): $kbit_desiredsize"
+Write-Host "Target total audio size (kbit): $kbit_audiosize"
+Write-Host "=== === ==="
+Write-Host "Initial target video bitrate (kbps): $($kbit_desiredsize / $duration)"
+Write-Host "Target audio bitrate (kbps): $audiobitrate"
 
-$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
-$videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize - 4194) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata - lowfilesizeratioovershootprevention, all divided by the duration 
-Write-Host "Final Target Bitrate: $videoTargetkbps kbps"
+$videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration 
+Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
+pause
 
 # settings/arguments for each codec
 if ($videocodec -eq "libx265"){ 
@@ -123,6 +137,8 @@ if ($videocodec -eq "libx265"){
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
 }
+
+
 $ffvideonullargsP1 = @(
     "-an",
     "-f", "null", "NUL"    
@@ -162,17 +178,18 @@ if (!$outputfolder){
     exit
 }
 Write-Host "Output file path: $finaloutputpath"
-Pause
 
 $starttime = Get-Date
 
 if (-not($videocodec -eq "hevc_nvenc")){
-    Write-Host "=== Start 1st pass ==="
-    & ffmpeg -hide_banner @ffvideoargsP1 @ffrescaleargs @ffvideonullargsP1
+    Write-Host "=== === Start 1st pass === ==="
+    Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffrescaleargs $ffbitratelimitargs $ffvideonullargsP1"
+    & ffmpeg -hide_banner @ffvideoargsP1 @ffrescaleargs @ffbitratelimitargs @ffvideonullargsP1
 }
 
-Write-Host "=== Start final pass ==="
-& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffaudioargs $finaloutputpath
+Write-Host "=== === Start final pass === ==="
+Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffrescaleargs $ffbitratelimitargs $ffaudioargs $finaloutputpath"
+& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffbitratelimitargs @ffaudioargs $finaloutputpath
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
