@@ -16,14 +16,15 @@ param(
     $videoheight = -1,
     [Alias("w")]
     $videowidth = -1,
+    [Alias("brlow")]
+    $brpercentagelowering = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead.
 
     [Alias("ca")]
     $audiocodec = "libopus", # other available codecs: acc
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
     $fancyrename = $true, # pass "0" for false when changing this to false. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
-    [Alias("brlow")]
-    $brpercentagelowering = 0 # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead.
+    $cleanlogs = $true
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -73,14 +74,14 @@ if ($videocodec -eq "libx265"){
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-preset", "$videocodecpreset"
-        "-x265-params", "pass=1"
+        "-x265-params", "pass=1:log-level=1"
     )
     $ffvideoargsP2 = @(
         "-i", $video,
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-preset", "$videocodecpreset"
-        "-x265-params", "pass=2:log-level=1" #set log level to 1 so it doesnt show the same info as the 1st pass
+        "-x265-params", "pass=2:log-level=1"
     )
 } elseif ($videocodec -eq "hevc_nvenc"){
     if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
@@ -166,6 +167,15 @@ if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     $ffrescaleargs = @()
 }
 
+if ($cleanlogs -eq 1){
+    $ffloglevel = @(
+        "-loglevel", "error",
+        "-stats"
+    )
+} else {
+    $ffloglevel = @()
+}
+
 if ($fancyrename){
     $outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
 } else {
@@ -187,13 +197,13 @@ $starttime = Get-Date
 
 if (-not($videocodec -eq "hevc_nvenc")){
     Write-Host "=== === Start 1st pass === ==="
-    Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffrescaleargs $ffbitratelimitargs $ffvideonullargsP1"
-    & ffmpeg -hide_banner @ffvideoargsP1 @ffrescaleargs @ffbitratelimitargs @ffvideonullargsP1
+    # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffbitratelimitargs $ffvideonullargsP1"
+    & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffbitratelimitargs @ffvideonullargsP1
 }
 
 Write-Host "=== === Start final pass === ==="
-Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffrescaleargs $ffbitratelimitargs $ffaudioargs $finaloutputpath"
-& ffmpeg -hide_banner @ffvideoargsP2 @ffrescaleargs @ffbitratelimitargs @ffaudioargs $finaloutputpath
+# Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffloglevel $ffrescaleargs $ffbitratelimitargs $ffaudioargs $finaloutputpath"
+& ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffbitratelimitargs @ffaudioargs $finaloutputpath
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
