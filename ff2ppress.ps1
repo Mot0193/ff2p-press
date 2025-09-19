@@ -21,7 +21,9 @@ param(
     $audiocodec = "libopus", # other available codecs: acc
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
-    $fancyrename = $true # pass "0" for false when changing this to false. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
+    $fancyrename = $true, # pass "0" for false when changing this to false. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
+    [Alias("brlow")]
+    $brpercentagelowering = 0 # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead.
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -58,6 +60,10 @@ Write-Host "Initial target video bitrate (kbps): $($kbit_desiredsize / $duration
 Write-Host "Target audio bitrate (kbps): $audiobitrate"
 
 $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration 
+if ($brpercentagelowering -gt 0){
+    $videoTargetkbps = $videoTargetkbps * (1 - ($brpercentagelowering / 100))
+    Write-Host "Bitrate lowering percentage: $brpercentagelowering%"
+}
 Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
 
 # settings/arguments for each codec
