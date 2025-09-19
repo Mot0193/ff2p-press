@@ -167,7 +167,8 @@ if ($fancyrename){
 }
 
 if (!$outputfolder){
-    $finaloutputpath = "$(Split-Path -Path $video)\$outputfilename"
+    $videoFullPath = Resolve-Path -Path $video
+    $finaloutputpath = "$(Split-Path -Path $videoFullPath)\$outputfilename"
 } elseif (Test-Path -Path $outputfolder) {
     $finaloutputpath = "$outputfolder\$outputfilename"
 } else {
