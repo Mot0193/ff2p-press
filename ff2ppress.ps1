@@ -23,7 +23,7 @@ param(
     $audiocodec = "libopus", # other available codecs: acc
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
-    $fancyrename = $true, # pass "0" for false when changing this to false. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
+    $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     $cleanlogs = $true
 )
 
@@ -66,6 +66,7 @@ if ($brpercentagelowering -gt 0){
     Write-Host "Bitrate lowering percentage: $brpercentagelowering%"
 }
 Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
+Write-Host "=== === ==="
 
 # settings/arguments for each codec
 if ($videocodec -eq "libx265"){ 
@@ -114,7 +115,7 @@ if ($videocodec -eq "libx265"){
     )
 } elseif ($videocodec -eq "libaom-av1"){
     Write-Host "libaom-av1 Info! This codec runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
-    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but its not. This could be just a bug. After the 1st pass is done you may see `"Output file is empty, nothing was encoded`". This shouldnt mean anything, double pass should still work as intended."
+    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the video will still encode. This seems to be just a bug. After the 1st pass is done you may see `"Output file is empty, nothing was encoded`". This shouldnt mean anything, double pass should still work as intended."
     if (-not ($videocodecpreset -in "0","1","2","3","4","5","6","7","8")){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libaom-av1 `"cpu-used`" value, defaulting to cpu-used `"8`" for libaom-av1 (fastest setting)"
         $videocodecpreset = "8"
@@ -209,6 +210,14 @@ $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
 Write-Host "Encoding took $elapsedtime seconds in total"
 
-
 Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # deletes x265 log files
 Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue # deletes other 2pass ffmpeg log files
+
+$MiBresultsize = (Get-Item -Path $finaloutputpath).Length/1MB
+if ($MiBresultsize -ge $MiBdesiredsize){
+    Write-Host "Warning! Resulting file size ($MiBresultsize MiB) is over the target size."
+    Write-Host "Try decreasing the file size target, using -lowbr to lower the bitrate, or decreasing output resolution"
+    Write-Host "Size difference (result - target): $($MiBresultsize - $MiBdesiredsize) MiB"
+}
+
+Write-Host "=== === === Video Done! === === ==="
