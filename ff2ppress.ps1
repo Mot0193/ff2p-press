@@ -9,9 +9,9 @@ param(
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
 
     [Alias("cv")]
-    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx254, libaom-av1
+    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx254, libsvtav1, libaom-av1
     [Alias("cvpreset")]
-    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libaom-av1 - 8 (this is for the "cpu-used" argument)
+    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libsvtav1 - 7, libaom-av1 - 8
     [Alias("h")]
     $videoheight = -1,
     [Alias("w")]
@@ -24,7 +24,7 @@ param(
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
     $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
-    $cleanlogs = $true
+    $cleanlogs = $true # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -34,11 +34,11 @@ if ($MiBstartingsize -le $MiBdesiredsize){
 }
 $duration = [math]::Round([int](ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $video))
 
-[int]$kbit_desiredsize = [int]$MiBdesiredsize * 8388.608
+[int]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
 $kbps_startingaudioBitrate = [math]::Round([int](ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000)
 
 if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudioBitrate){
-    Write-Host "Audio bitrate of the given video is lower than the target bitrate. Using $kbps_startingaudioBitrate`kbps instead of $audiobitrate`kbps"
+    Write-Host "Audio bitrate of the input video is lower than the target bitrate. Using $kbps_startingaudioBitrate`kbps instead of $audiobitrate`kbps"
     $audiobitrate = $kbps_startingaudioBitrate
 }
 
@@ -114,15 +114,14 @@ if ($videocodec -eq "libx265"){
         "-pass", "2"
     )
 } elseif ($videocodec -eq "libaom-av1"){
-    Write-Host "libaom-av1 Info! This codec runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
+    Write-Host "libaom-av1 Info! This library runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
     Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the video will still encode. This seems to be just a bug. After the 1st pass is done you may see `"Output file is empty, nothing was encoded`". This shouldnt mean anything, double pass should still work as intended."
-    if (-not ($videocodecpreset -in "0","1","2","3","4","5","6","7","8")){
+    if ($videocodecpreset -notin (0..8)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libaom-av1 `"cpu-used`" value, defaulting to cpu-used `"8`" for libaom-av1 (fastest setting)"
         $videocodecpreset = "8"
     }
-    if ($videocodecpreset -in "0","1","2","3"){
-        Write-Host "!!! WARNING !!! - Low libaom-av1 presets/`"cpu-used`" values makes the codec run EXTREMELY slow. Consider increasing this."
-        Start-Sleep -Seconds 5
+    if ($videocodecpreset -in (0..3)){
+        Write-Host "!!! WARNING !!! Low libaom-av1 presets/`"cpu-used`" values makes the codec run EXTREMELY slow. Consider increasing this."
     }
 
     $ffvideoargsP1 = @(
@@ -140,6 +139,26 @@ if ($videocodec -eq "libx265"){
         "-pass", "2",
         "-cpu-used", "$videocodecpreset",
         "-row-mt", "1"
+    )
+} elseif ($videocodec -eq "libsvtav1"){
+    Write-Host "libsvtav1 Info! This library tends to overshoot the file size target. Try using -lowbr for example to decrease the bitrate a little if you cant get a file down to an exact size"
+    if ($videocodecpreset -notin (-1..13)){
+        Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"7`""
+        $videocodecpreset = "7"
+    }
+    $ffvideoargsP1 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$videoTargetkbps`k",
+        "-pass", "1",
+        "-preset", "$videocodecpreset"
+    )
+    $ffvideoargsP2 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$videoTargetkbps`k",
+        "-pass", "2",
+        "-preset", "$videocodecpreset"
     )
 } else {
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
@@ -220,6 +239,7 @@ if ($MiBresultsize -ge $MiBdesiredsize){
     Write-Host "Warning! Resulting file size ($MiBresultsize MiB) is over the target size."
     Write-Host "Try decreasing the file size target, using -lowbr to lower the bitrate, or decreasing output resolution"
     Write-Host "Size difference (result - target): $($MiBresultsize - $MiBdesiredsize) MiB"
+    Write-Host "Recommended size to retry with (target - Size difference): $($MiBdesiredsize - ($MiBresultsize - $MiBdesiredsize)) MiB"
 }
 
 Write-Host "=== === === Video Done! === === ==="
