@@ -130,14 +130,16 @@ if ($videocodec -eq "libx265"){
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-pass", "1",
-        "-cpu-used", "$videocodecpreset"
+        "-cpu-used", "$videocodecpreset",
+        "-row-mt", "1"
     )
     $ffvideoargsP2 = @(
         "-i", $video,
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
         "-pass", "2",
-        "-cpu-used", "$videocodecpreset"
+        "-cpu-used", "$videocodecpreset",
+        "-row-mt", "1"
     )
 } else {
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
