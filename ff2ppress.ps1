@@ -87,7 +87,6 @@ if ($brpercentagelowering -gt 0) { Write-Host "Bitrate lowering percentage: $brp
 
 Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
 Write-Host "=== === ==="
-pause
 
 # settings/arguments for each codec
 if ($videocodec -eq "libx265"){ 
