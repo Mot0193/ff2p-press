@@ -3,7 +3,7 @@ param(
     $video, 
 
     [Alias("s")]
-    $MiBdesiredsize,
+    $MiBdesiredsize, # set a target size in MiB
 
     [Alias("o")]
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
@@ -13,14 +13,18 @@ param(
     [Alias("cvpreset")]
     $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libsvtav1 - 7, libaom-av1 - 8
     [Alias("h")]
-    $videoheight = -1,
+    $videoheight = -1, # set a video Height or Width in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). Deafult values do not rescale the video
     [Alias("w")]
     $videowidth = -1,
+    [Alias("brv")] # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
+    $videoTargetkbps,
     [Alias("brlow")]
-    $brpercentagelowering = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead.
+    $brpercentagelowering = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead. 
+    # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
 
     [Alias("ca")]
     $audiocodec = "libopus", # other available codecs: acc
+    [Alias("bra")]
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
     $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
@@ -32,22 +36,42 @@ if ($MiBstartingsize -le $MiBdesiredsize){
     Write-Host "Error: target size cant be higher than the video's current size ($MiBstartingsize)"
     exit
 }
-$duration = [math]::Round([int](ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $video))
+$duration = [math]::Round((ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $video))
+$kbps_startingaudioBitrate = [math]::Round((ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000)
 
-[int]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
-$kbps_startingaudioBitrate = [math]::Round([int](ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000)
+
 
 if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudioBitrate){
     Write-Host "Audio bitrate of the input video is lower than the target bitrate. Using $kbps_startingaudioBitrate`kbps instead of $audiobitrate`kbps"
     $audiobitrate = $kbps_startingaudioBitrate
 }
 
-[int]$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
-if (($kbit_audiosize / $kbit_desiredsize) -gt 0.2){
-    Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
-    # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-    $audiobitrate = 0.2 * $kbit_desiredsize / $duration
-    $kbit_audiosize = [int]$audiobitrate * $duration
+if ($MiBdesiredsize){
+    [int]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
+    [int]$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
+    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration 
+
+    if (($kbit_audiosize / $kbit_desiredsize) -gt 0.2){
+        Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
+        # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
+        $audiobitrate = 0.2 * $kbit_desiredsize / $duration
+        $kbit_audiosize = [int]$audiobitrate * $duration
+    }
+
+    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration
+
+    if ($brpercentagelowering -gt 0){
+        $videoTargetkbps = $videoTargetkbps * (1 - ($brpercentagelowering / 100))
+    }
+} elseif ($brpercentagelowering -gt 0) {
+    $inputvideobitrate = (ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of csv=p=0 $video) / 1000
+    Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($inputvideobitrate kbps) instead"
+    $videoTargetkbps = $inputvideobitrate * (1 - ($brpercentagelowering / 100))
+}
+
+if (-not ($videoTargetkbps -gt 0)){
+    Write-Host "Error: Target bitrate is not valid (not set or not > 0)"
+    exit
 }
 
 
@@ -59,14 +83,11 @@ Write-Host "Target total audio size (kbit): $kbit_audiosize"
 Write-Host "=== === ==="
 Write-Host "Initial target video bitrate (kbps): $($kbit_desiredsize / $duration)"
 Write-Host "Target audio bitrate (kbps): $audiobitrate"
+if ($brpercentagelowering -gt 0) { Write-Host "Bitrate lowering percentage: $brpercentagelowering%" }
 
-$videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration 
-if ($brpercentagelowering -gt 0){
-    $videoTargetkbps = $videoTargetkbps * (1 - ($brpercentagelowering / 100))
-    Write-Host "Bitrate lowering percentage: $brpercentagelowering%"
-}
 Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
 Write-Host "=== === ==="
+pause
 
 # settings/arguments for each codec
 if ($videocodec -eq "libx265"){ 
@@ -199,7 +220,8 @@ if ($cleanlogs -eq 1){
 }
 
 if ($fancyrename){
-    $outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4"
+    if ($MiBdesiredsize){ $outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
+    else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
 } else {
     $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 }
@@ -229,13 +251,13 @@ Write-Host "=== === Start final pass === ==="
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
-Write-Host "Encoding took $elapsedtime seconds in total"
+Write-Host "Encoding took $elapsedtime seconds in total ($($elapsedtime / 60) minutes)"
 
 Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # deletes x265 log files
 Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue # deletes other 2pass ffmpeg log files
 
 $MiBresultsize = (Get-Item -Path $finaloutputpath).Length/1MB
-if ($MiBresultsize -ge $MiBdesiredsize){
+if ($MiBdesiredsize -and ($MiBresultsize -ge $MiBdesiredsize)){
     Write-Host "Warning! Resulting file size ($MiBresultsize MiB) is over the target size."
     Write-Host "Try decreasing the file size target, using -lowbr to lower the bitrate, or decreasing output resolution"
     Write-Host "Size difference (result - target): $($MiBresultsize - $MiBdesiredsize) MiB"

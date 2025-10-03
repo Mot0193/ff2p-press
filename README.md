@@ -1,7 +1,7 @@
 # ff2p-press
 A Powershell script for Windows that uses FFMPEG 2-pass encoding to compress videos to a given size.
 
-By default, when using the only required `-i` and `-s` arguments, the video codec gets set to libx265 at the medium preset, and the libopus audio codec at 128k bitrate or the input video's audio bitrate, whichevers lower.
+By default the video codec gets set to libx265 at the medium preset, and the libopus audio codec at 128k bitrate or the input video's audio bitrate, whichevers lower.
 Videos will get output to the same folder as the input video by default, with this naming scheme: `compressed_<targeted_size>mib_<original_video_name>_<codec_used>_<preset_used>`
 
 ## Quick usage parameters:
@@ -15,7 +15,9 @@ Videos will get output to the same folder as the input video by default, with th
 
 Thats it! For advanced codec settings continue reading and consult the example usages below.
 
-# Examples of parameter usage
+## Examples of parameter usage
+See the "param" block inside the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i"). Most of them have comments explaining what each parameter does.
+
 ```
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 30    (compresses input video to the selected size with the default codecs and presets)
 -i "C:\Users\mot\Desktop\drive.mp4" -s 50 -cv libaom-av1    (change the default video codec to libaom-av1)
@@ -25,8 +27,6 @@ Thats it! For advanced codec settings continue reading and consult the example u
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 16.4 -fancyrename 0    (disable fancy rename. Files will just be named `compressed_<original_video_name>`)
 -i "C:\Users\mot\Desktop\Desktop_2025.07.19_-_20.17.50.03.DVR.mp4" -s 10 -cv libsvtav1 -brlow 3   (change preset, lower the final target bitrate by 2%)
 ```
-
-See the "param" block inside the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i"), and some have small comment explainations.
 
 # Codec options/usage tips
 
