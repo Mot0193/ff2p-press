@@ -1,8 +1,14 @@
 # ff2p-press
-A Powershell script for Windows that uses FFMPEG 2-pass encoding to compress videos to a given size.
+A Powershell script for Windows that uses ffmpeg 2-pass encoding to compress videos to a given size.
 
 By default the video codec gets set to libx265 at the medium preset, and the libopus audio codec at 128k bitrate or the input video's audio bitrate, whichevers lower.
 Videos will get output to the same folder as the input video by default, with this naming scheme: `compressed_<targeted_size>mib_<original_video_name>_<codec_used>_<preset_used>`
+
+## ffmpeg instalation
+Make sure to install an ffmpeg package that contains all the codecs this script supports. For example if youre installing ffmpeg from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), you should install the "full" release:
+```
+winget install ffmpeg
+```
 
 ## Quick usage parameters:
 `-i <path_to_file>` Video file input
@@ -16,7 +22,7 @@ Videos will get output to the same folder as the input video by default, with th
 Thats it! For advanced codec settings continue reading and consult the example usages below.
 
 ## Examples of parameter usage
-See the "param" block inside the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i"). Most of them have comments explaining what each parameter does.
+See the "param" block inside the ps1 script for all the parameters you can set. Some have aliases (for example you can use "-video" _or_ just "-i"). All of them have comments explaining what each parameter does.
 
 ```
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 30    (compresses input video to the selected size with the default codecs and presets)
@@ -25,20 +31,20 @@ See the "param" block inside the ps1 script for all the parameters you can set. 
 -i  "C:\Users\mot\Desktop\drive.mp4" -s 50 -h 1080 -cv hevc_nvenc    (change codec, rescale the video to 1080p. Here since only the height is set, the width will automatically adjust to match the aspect ratio of the video)
 -i "C:\Users\mot\Desktop\Test\NieR_Automata_2025.08.21_-_20.07.22.02.DVR.mp4" -s 25 -o "C:\Users\mot\Desktop"    (change the output directory)
 -i "C:\Users\mot\Desktop\Overwatch_28.08.2025_21-18-54.mp4" -s 16.4 -fancyrename 0    (disable fancy rename. Files will just be named `compressed_<original_video_name>`)
--i "C:\Users\mot\Desktop\Desktop_2025.07.19_-_20.17.50.03.DVR.mp4" -s 10 -cv libsvtav1 -brlow 3   (change preset, lower the final target bitrate by 2%)
+-i "C:\Users\mot\Desktop\Desktop_2025.07.19_-_20.17.50.03.DVR.mp4" -s 10 -cv libsvtav1 -brlow 3   (change preset, lower the final target bitrate by 3%)
 ```
 
 # Codec options/usage tips
 
 ## libx265 (hevc/H265)
-This is the default. H265 is a good codec overall, with quality slightly worse than AV1. Presets over medium give diminishing returns for videos that require less compression, though it might make a bigger difference on larger videos that need to get compressed more. But at some point using libaom-av1 with it's fastest preset might be better than a very slow libx265 preset.
+This is the default. H265 is a good codec overall. Presets over medium give diminishing returns for videos that require less compression, though it might make a bigger difference on larger videos that need to get compressed more. But at some point using libaom-av1 with it's fastest preset might be better than a very slow libx265 preset.
 
 libx265 supports these [presets](https://x265.readthedocs.io/en/master/presets.html): (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
 
 Default preset is "medium"
 
 ## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
-In general all hardware accelerated codecs provide worse quality than their software (cpu) versions (in this case compared to libx265). But they are A LOT faster even at the highest quality/preset settings, but even at their highest presets they cant usually beat a good softare encoder.
+In general all hardware accelerated codecs provide worse quality than their software (cpu) versions (in this case compared to libx265). But they are A LOT faster even at the highest quality/preset settings, though even at their highest presets they cant usually beat a good softare encoder.
 For this reason i wouldnt go below the max preset for nvenc, and some options are complately hardcoded with the use of a high quality preset in mind (for example enabling double pass with the full resolution. Normally lower presets might disable this)
 
 hevc_nvenc supports some weird presents, but the main ones are: p1, p2, p3, ... p7. higher values provide higher quality. To see all presets run "ffmpeg -h encoder=hevc_nvenc"
@@ -56,7 +62,7 @@ Default preset is "medium"
 
 ## libaom-av1 (av1)
 This is av1 software encoding. VERY slow, but considered the best. Because of its mind-numbing speed, i consider going under the preset 8 to be brave (this is actually the "cpu-used" argument, not really a "preset").
-But, even at the fastest preset (8) it can achieve great results, sometimes even better and faster compared to libx265 at the slow preset. This is just from my very limited testing, though.
+But even at the fastest preset (8) it can achieve great results, sometimes even better and faster compared to libx265 at the very slow preset. This is just from my very limited testing, though.
 
 libaom-av1 supports these "[cpu-used](https://ffmpeg.org/ffmpeg-codecs.html#libaom_002dav1)" values as "presets": (0, 1, 2, ... 8), 0 being the slowest while 8 the fastest. For reference, the library defaults to 1.
 
@@ -65,7 +71,7 @@ Default preset (for this script) is "8"
 Row multi-threading (-row-mt) is also enabled.
 
 ## libsvtav1 (av1)
-Different flavour of av1 software encoding. This has a couple of differences compared to libaom-av1, such as being able to scale better across many cpu cores, and having a couple performance improvements at the cost of lower efficiency/quality. If youre unsatisfied with the speed of libaom-av1 try using this and testing out different presets. From my testing the preset 7 is slightly faster than libx265's medium preset, though i think libx265 looks better so for this reason i wouldnt use libsvtav1. But you can decide for yourself if you want to use it or not. I also noticed it tends to overshoot the target size, so you may want to use -brlow 3 for example to lower the bitrate by 3% or something.
+Different flavour of av1 software encoding. This has a couple of differences compared to libaom-av1, such as being able to scale better across many cpu cores, and having a couple performance improvements at the cost of lower efficiency/quality. If youre unsatisfied with the speed of libaom-av1 try using this and test out different presets. From my testing the preset 7 is slightly faster than libx265's medium preset, but i personally still think libx265 looks better. I also noticed it tends to overshoot the target size, so you may want to use -brlow 3 for example to lower the target bitrate by 3% or something.
 
 libsvtav1 supports these [presets](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md#options): 0, 1, ... 13, 0 being the slowest and 13 the fastest. 
 
@@ -76,13 +82,4 @@ The default is libopus with 128k bitrate (or the input video's, if its lower). I
 
 # Codec compatibility notice
 
-While newer codecs might offer better compression/file size efficiency, they can lack compatibility with devices and services. For example AV1 is known for being hard to playback on some devices (especially mobile devices, and even decently-modern computers with no hardware AV1 decoding can struggle), so depending of what you want to do with the video different codecs are best for different use-cases. Heres a rough list of codecs from the most compatible to least compatible:
-
-Video Codecs:
-- H264 (most compatible)
-- H265
-- AV1
-
-Audio Codecs:
-- ACC (most compatible)
-- Opus
+While newer codecs might offer better compression/file size efficiency, they can lack compatibility with devices and services. For example AV1 is known for being hard to playback on some devices (especially mobile devices, and even decently-modern computers can struggle), so depending of what you want to do with the video different codecs are best for different use-cases. In general, H265 and Opus should play fine on most, relatively modern devices. If youre sharing the video and people are complaining they cant play it, try use H264 and ACC. AV1 is great, but id personally use it only for archival purposes.

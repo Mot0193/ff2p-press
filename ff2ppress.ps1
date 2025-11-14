@@ -13,11 +13,11 @@ param(
     [Alias("cvpreset")]
     $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libsvtav1 - 7, libaom-av1 - 8
     [Alias("h")]
-    $videoheight = -1, # set a video Height or Width in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). Deafult values do not rescale the video
+    $videoheight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The deafult values (-1) do not rescale the video
     [Alias("w")]
     $videowidth = -1,
-    [Alias("brv")] # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
-    $videoTargetkbps,
+    [Alias("brv")] 
+    $videoTargetkbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
     [Alias("brlow")]
     $brpercentagelowering = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead. 
     # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
@@ -49,7 +49,7 @@ if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudio
 if ($MiBdesiredsize){
     [int]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
     [int]$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
-    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration 
+    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
 
     if (($kbit_audiosize / $kbit_desiredsize) -gt 0.2){
         Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
@@ -58,7 +58,7 @@ if ($MiBdesiredsize){
         $kbit_audiosize = [int]$audiobitrate * $duration
     }
 
-    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size - 0.5 MiB~ for a little headroom/metadata, all divided by the duration
+    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration
 
     if ($brpercentagelowering -gt 0){
         $videoTargetkbps = $videoTargetkbps * (1 - ($brpercentagelowering / 100))
