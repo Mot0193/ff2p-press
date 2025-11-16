@@ -9,9 +9,9 @@ param(
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
 
     [Alias("cv")]
-    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx254, libsvtav1, libaom-av1
+    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1
     [Alias("cvpreset")]
-    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx254 - medium, libsvtav1 - 7, libaom-av1 - 8
+    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8
     [Alias("h")]
     $videoheight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The deafult values (-1) do not rescale the video
     [Alias("w")]
@@ -29,7 +29,7 @@ param(
 
     $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
-    $autoretry = $true
+    $autoretry = $true # unused for now
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -105,20 +105,6 @@ if ($videocodec -eq "libx265"){
         "-preset", "$videocodecpreset"
         "-x265-params", "pass=2:log-level=1"
     )
-} elseif ($videocodec -eq "hevc_nvenc"){
-    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
-        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
-        $videocodecpreset = "p7"
-    }
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$videoTargetkbps`k",
-        "-preset", "$videocodecpreset",
-        "-rc", "cbr",
-        "-tune", "hq",
-        "-multipass", "fullres"
-    )
 } elseif ($videocodec -eq "libx264"){
     $ffvideoargsP1 = @(
         "-i", $video,
@@ -133,6 +119,34 @@ if ($videocodec -eq "libx265"){
         "-b:v", "$videoTargetkbps`k",
         "-preset", "$videocodecpreset"
         "-pass", "2"
+    )
+} elseif ($videocodec -eq "hevc_nvenc"){
+    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
+        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
+        $videocodecpreset = "p7"
+    }
+    $ffvideoargsP2 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$videoTargetkbps`k",
+        "-preset", "$videocodecpreset",
+        "-rc", "cbr",
+        "-tune", "hq",
+        "-multipass", "fullres"
+    )
+} elseif ($videocodec -eq "h264_nvenc"){
+    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
+        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
+        $videocodecpreset = "p7"
+    }
+    $ffvideoargsP2 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$videoTargetkbps`k",
+        "-preset", "$videocodecpreset",
+        "-rc", "cbr",
+        "-tune", "hq",
+        "-multipass", "fullres"
     )
 } elseif ($videocodec -eq "libaom-av1"){
     Write-Host "libaom-av1 Info! This library runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
@@ -164,8 +178,8 @@ if ($videocodec -eq "libx265"){
 } elseif ($videocodec -eq "libsvtav1"){
     Write-Host "libsvtav1 Info! This library tends to overshoot the file size target. Try using -lowbr to decrease the bitrate a little if you cant get a file down to an exact size"
     if ($videocodecpreset -notin (-1..13)){
-        Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"7`""
-        $videocodecpreset = "7"
+        Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
+        $videocodecpreset = "5"
     }
     $ffvideoargsP1 = @(
         "-i", $video,
@@ -240,7 +254,7 @@ Write-Host "Output file path: $finaloutputpath"
 
 $starttime = Get-Date
 
-if (-not($videocodec -eq "hevc_nvenc")){
+if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
     Write-Host "=== === Start 1st pass === ==="
     # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffbitratelimitargs $ffvideonullargsP1"
     & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffbitratelimitargs @ffvideonullargsP1

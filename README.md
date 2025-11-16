@@ -60,9 +60,17 @@ libx264 supports the same [presets](https://trac.ffmpeg.org/wiki/Encode/H.264#a2
 
 Default preset is "medium"
 
+## h264_nvenc (H264 hardware accelerated for Nvidia GPUs)
+libx264 is pretty fast already on the cpu, but for the sake of having the option the script supports h264_nvenc too. Once again hardawre accelerated encoders are very fast even at their highest settings, but the quality is lacking compared to their cpu versions (in this case libx264).
+
+h264_nvenc supports the same main presets as hevc_nvenc: p1, p2, p3, ... p7. higher values provide higher quality.
+
+Default preset (for this script) is "p7"
+
+CBR (Constant bitrate) is also enabled.
+
 ## libaom-av1 (av1)
-This is av1 software encoding. VERY slow, but considered the best. Because of its mind-numbing speed, i consider going under the preset 8 to be brave (this is actually the "cpu-used" argument, not really a "preset").
-But even at the fastest preset (8) it can achieve great results, sometimes even better and faster compared to libx265 at the very slow preset. This is just from my very limited testing, though.
+This is av1 software encoding. VERY slow, but considered the best. libaom-av1 doenst have "presets" but it does have the "cpu-used" argument, which for the purposes of this script it can be considered as a "preset" setting. Even at the fastest value (8) it can achieve great results, sometimes even better and faster compared to libx265 at the veryslow preset. This is just from my very limited testing, but be your own judge. I dont reccomend going below preset 4, as the encoding time becomes unbearable (even on high end cpus).
 
 libaom-av1 supports these "[cpu-used](https://ffmpeg.org/ffmpeg-codecs.html#libaom_002dav1)" values as "presets": (0, 1, 2, ... 8), 0 being the slowest while 8 the fastest. For reference, the library defaults to 1.
 
@@ -71,11 +79,12 @@ Default preset (for this script) is "8"
 Row multi-threading (-row-mt) is also enabled.
 
 ## libsvtav1 (av1)
-Different flavour of av1 software encoding. This has a couple of differences compared to libaom-av1, such as being able to scale better across many cpu cores, and having a couple performance improvements at the cost of lower efficiency/quality. If youre unsatisfied with the speed of libaom-av1 try using this and test out different presets. From my testing the preset 7 is slightly faster than libx265's medium preset, but i personally still think libx265 looks better. I also noticed it tends to overshoot the target size, so you may want to use -brlow 3 for example to lower the target bitrate by 3% or something.
+Different flavour of av1 software encoding. This has a couple of differences compared to libaom-av1, such as being able to scale better across many cpu cores, and having a couple performance improvements at the cost of lower efficiency/quality. If youre unsatisfied with the speed of libaom-av1 try using this and test out different presets. I noticed it tends to overshoot the target size, so you may want to use -brlow 3 for example to lower the target bitrate by 3% or something. 
 
-libsvtav1 supports these [presets](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md#options): 0, 1, ... 13, 0 being the slowest and 13 the fastest. 
+libsvtav1 supports these [presets](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md#options): 0, 1, ... 13, 0 being the slowest and 13 the fastest.
+You may be interested in reading Trix's [article(s)](https://wiki.x266.mov/blog/svt-av1-third-deep-dive) about the codec's presets and their efficiency.
 
-Default preset (for this script) is "7"
+Default preset (for this script) is "5"
 
 ## Audio codecs: libopus (opus) / acc
 The default is libopus with 128k bitrate (or the input video's, if its lower). If youre unsatisfied with how it sounds try ACC. From what i read opus does great at medium bitrates (64k, 128, 192k), but at very low bitrates you might want to try ACC. At high bitrates the difference between codecs is very minor.
