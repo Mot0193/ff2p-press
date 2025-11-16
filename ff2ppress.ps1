@@ -28,7 +28,8 @@ param(
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
     $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
-    $cleanlogs = $true # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
+    $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
+    $autoretry = $true
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
@@ -161,7 +162,7 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Host "libsvtav1 Info! This library tends to overshoot the file size target. Try using -lowbr for example to decrease the bitrate a little if you cant get a file down to an exact size"
+    Write-Host "libsvtav1 Info! This library tends to overshoot the file size target. Try using -lowbr to decrease the bitrate a little if you cant get a file down to an exact size"
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"7`""
         $videocodecpreset = "7"
@@ -203,7 +204,8 @@ if ($audiocodec -in "libopus", "acc"){
 if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     Write-Host "Rescaling the video to $videowidth`:$videoheight (width:height)"
     $ffrescaleargs = @(
-        "-vf", "scale=$([int]$videowidth)`:$([int]$videoheight)"
+        "-vf", "scale=$([int]$videowidth)`:$([int]$videoheight)",
+        "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
     )
 } else {
     $ffrescaleargs = @()
