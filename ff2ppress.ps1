@@ -27,6 +27,9 @@ param(
     [Alias("bra")]
     $audiobitrate = "128", # Or the input video's bit rate, whichever is lower
 
+    [Alias("args")] # pass extra, codec-specific arguments to ffmpeg. For example using "-args lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g lp=2:pin=4)
+    $extraarguments,
+
     $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
     $autoretry = $true # unused for now
@@ -225,6 +228,20 @@ if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     $ffrescaleargs = @()
 }
 
+if (($extraarguments)){
+    if($videocodec -eq "libaom-av1"){
+        $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
+    } else {
+        $codecparam = $videocodec.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
+    }
+
+    $ffextraargs = @(
+        "-$codecparam-params", "$extraarguments"
+    )
+} else {
+    $ffextraargs = @()
+}
+
 if ($cleanlogs -eq 1){
     $ffloglevel = @(
         "-loglevel", "error",
@@ -256,13 +273,13 @@ $starttime = Get-Date
 
 if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
     Write-Host "=== === Start 1st pass === ==="
-    # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffbitratelimitargs $ffvideonullargsP1"
-    & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffbitratelimitargs @ffvideonullargsP1
+    # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffextraargs $ffvideonullargsP1"
+    & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
 }
 
 Write-Host "=== === Start final pass === ==="
-# Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffloglevel $ffrescaleargs $ffbitratelimitargs $ffaudioargs $finaloutputpath"
-& ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffbitratelimitargs @ffaudioargs $finaloutputpath
+# Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffloglevel $ffrescaleargs $ffextraargs $ffaudioargs $finaloutputpath"
+& ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffextraargs @ffaudioargs $finaloutputpath
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
