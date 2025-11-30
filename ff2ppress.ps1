@@ -36,13 +36,20 @@ param(
 )
 
 $MiBstartingsize = (Get-Item -Path $video).Length/1MB
-if ($MiBstartingsize -le $MiBdesiredsize){
+if (-not($MiBstartingsize -eq "0") -and ($MiBstartingsize -le $MiBdesiredsize)){
     Write-Host "Error: target size cant be higher than the video's current size ($MiBstartingsize)"
     exit
 }
-$duration = [math]::Round((ffprobe -v error -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $video))
-$kbps_startingaudioBitrate = [math]::Round((ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000)
 
+# ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1
+$duration = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $video
+$kbps_startingVideoBitrate = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
+$kbps_startingaudioBitrate = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
+if (-not $kbps_startingaudioBitrate){
+    Write-Host "Failed to (easily) get the audio bitrate of the video. Fallbacking to `"letting ffmpeg get the audio size by copying it`" (???). This may not be accurate, but its good enough" # TODO!!! WRITE THIS BETTER
+    [int]$KiB_startingaudio = (ffmpeg -i $video -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+    $kbps_startingaudioBitrate = ($KiB_startingaudio * 8.192) / $duration
+}
 
 
 if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudioBitrate){
@@ -50,16 +57,16 @@ if (($kbps_startingaudioBitrate -le [int]$audiobitrate) -and $kbps_startingaudio
     $audiobitrate = $kbps_startingaudioBitrate
 }
 
-if ($MiBdesiredsize){
-    [int]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
-    [int]$kbit_audiosize = [int]$audiobitrate * $duration # the aproximate size of the whole audio
-    $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
+if ($MiBdesiredsize){ # TODO Rename EVERYTHING what the fuck are these variable names
+    [float]$kbit_desiredsize = [float]$MiBdesiredsize * 8388.608
+    [float]$kbit_audiosize = [float]$audiobitrate * $duration # the aproximate size of the whole audio
+    [float]$videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
 
     if (($kbit_audiosize / $kbit_desiredsize) -gt 0.2){
         Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
         # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
         $audiobitrate = 0.2 * $kbit_desiredsize / $duration
-        $kbit_audiosize = [int]$audiobitrate * $duration
+        $kbit_audiosize = [float]$audiobitrate * $duration
     }
 
     $videoTargetkbps = ($kbit_desiredsize - $kbit_audiosize) / $duration # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration
@@ -68,28 +75,21 @@ if ($MiBdesiredsize){
         $videoTargetkbps = $videoTargetkbps * (1 - ($brpercentagelowering / 100))
     }
 } elseif ($brpercentagelowering -gt 0) {
-    $inputvideobitrate = (ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of csv=p=0 $video) / 1000
+    $inputvideobitrate = (ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
     Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($inputvideobitrate kbps) instead"
     $videoTargetkbps = $inputvideobitrate * (1 - ($brpercentagelowering / 100))
-}
-
-if (-not ($videoTargetkbps -gt 0)){
+} elseif ($videoTargetkbps -le 0){
     Write-Host "Error: Target bitrate is not valid (not set or not > 0)"
-    exit
 }
-
 
 Write-Host "Video duration (sec): $duration"
 Write-Host "Video starting size (MiB): $MiBstartingsize"
+Write-Host "Video starting bitrate: $kbps_startingVideoBitrate kbps"
+Write-Host "Audio starting bitrate: $kbps_startingaudioBitrate kbps"
 Write-Host "=== === ==="
-Write-Host "Target file size (kbit): $kbit_desiredsize"
-Write-Host "Target total audio size (kbit): $kbit_audiosize"
-Write-Host "=== === ==="
-Write-Host "Initial target video bitrate (kbps): $($kbit_desiredsize / $duration)"
-Write-Host "Target audio bitrate (kbps): $audiobitrate"
 if ($brpercentagelowering -gt 0) { Write-Host "Bitrate lowering percentage: $brpercentagelowering%" }
-
-Write-Host "Final target video Bitrate: $videoTargetkbps kbps"
+Write-Host "Video target bitrate: $videoTargetkbps kbps"
+Write-Host "Audio target bitrate: $audiobitrate kbps"
 Write-Host "=== === ==="
 
 # settings/arguments for each codec
@@ -251,7 +251,7 @@ if ($cleanlogs -eq 1){
     $ffloglevel = @()
 }
 
-if ($fancyrename){
+if ($fancyrename){ # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
     if ($MiBdesiredsize){ $outputfilename = "compressed_$($MiBdesiredsize)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
     else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
 } else {
