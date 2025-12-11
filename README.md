@@ -71,6 +71,7 @@ Default preset (for this script) is "p7"
 CBR (Constant bitrate) is also enabled.
 
 ## libsvtav1 (av1)
+IMPORTANT NOTE! ffmpeg does NOT support svt-av1 multi-pass mode. I only realized this VERY late into developing this script, and all this time ive been thinking 2-pass svt-av1 encoding worked with ffmpeg, but using 2-pass does NOTHING. For now this script will encode with only one pass when svt-av1 is chosen. Hopefully this will get added in ffmpeg eventually.
 AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets, and many other fancy features that the original AOM-AV1 lacks. You may wish to test out some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), if you wish to get into the nitty gritty of this codec. You can use ff2ppress's -args argument to pass codec-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for an example)
 
 libsvtav1 supports these [presets](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md#options): 0, 1, ... 13, 0 being the slowest and 13 the fastest.

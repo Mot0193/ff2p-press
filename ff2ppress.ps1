@@ -179,7 +179,7 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Host "libsvtav1 Info! This library tends to overshoot the file size target. Try using -lowbr to decrease the bitrate a little if you cant get a file down to an exact size"
+    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. 1-PASS mode will be used instead, which may overshoot file targets"
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
         $videocodecpreset = "5"
@@ -271,7 +271,7 @@ Write-Host "Output file path: $finaloutputpath"
 
 $starttime = Get-Date
 
-if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
+if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
     Write-Host "=== === Start 1st pass === ==="
     # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffextraargs $ffvideonullargsP1"
     & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
