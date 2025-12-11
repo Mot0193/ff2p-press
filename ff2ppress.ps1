@@ -82,14 +82,15 @@ if ($MiBdesiredsize){ # TODO Rename EVERYTHING what the fuck are these variable 
     Write-Host "Error: Target bitrate is not valid (not set or not > 0)"
 }
 
-Write-Host "Video duration (sec): $duration"
-Write-Host "Video starting size (MiB): $MiBstartingsize"
-Write-Host "Video starting bitrate: $kbps_startingVideoBitrate kbps"
-Write-Host "Audio starting bitrate: $kbps_startingaudioBitrate kbps"
 Write-Host "=== === ==="
-if ($brpercentagelowering -gt 0) { Write-Host "Bitrate lowering percentage: $brpercentagelowering%" }
-Write-Host "Video target bitrate: $videoTargetkbps kbps"
-Write-Host "Audio target bitrate: $audiobitrate kbps"
+Write-Host ("Starting Video Duration / Size / Bitrate    : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$duration, $MiBstartingsize, $([float]$kbps_startingVideoBitrate * 0.0009765625))
+Write-Host ("Starting Audio Bitrate                      : {0:F2} kbps" -f $kbps_startingaudioBitrate)
+if ($brpercentagelowering -gt 0) { 
+Write-Host ("Target Video Size / Bitrate / Low%          : {0} MiB / {1:F2} kbps / {2}%" -f $MiBdesiredsize, $videoTargetkbps, $brpercentagelowering)}
+else {
+Write-Host ("Target Video Size / Bitrate                 : {0} MiB / {1:F2} kbps" -f $MiBdesiredsize, $videoTargetkbps)
+}
+Write-Host ("Target Audio Bitrate                        : {0:F2} kbps" -f $audiobitrate)
 Write-Host "=== === ==="
 
 # settings/arguments for each codec
@@ -195,7 +196,7 @@ if ($videocodec -eq "libx265"){
         "-i", $video,
         "-c:v", $videocodec,
         "-b:v", "$videoTargetkbps`k",
-        "-pass", "2",
+        #"-pass", "2",
         "-preset", "$videocodecpreset"
     )
 } else {
