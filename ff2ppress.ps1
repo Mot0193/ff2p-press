@@ -191,7 +191,7 @@ if ($videocodec -eq "libx265"){
         "-f", "rawvideo",
         "-"
     )
-    ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
+
     $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=coded_height -of default=noprint_wrappers=1:nokey=1 $video
     $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=coded_width -of default=noprint_wrappers=1:nokey=1 $video
     $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
@@ -207,7 +207,6 @@ if ($videocodec -eq "libx265"){
         "--tbr", $TargetVideoBitrate_kbps,
         "--preset", $videocodecpreset,
         "--input-depth", $TargetVideoBitDepth,
-        "--passes" , "2",
         "--stats", "SvtAv1EncApp_2pass.log"
     )
 
@@ -218,6 +217,15 @@ if ($videocodec -eq "libx265"){
             "--$parameter", $value
         }
     }
+
+    $ffvideoargsP2 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$TargetVideoBitrate_kbps`k",
+        #"-pass", "2",
+        "-preset", "$videocodecpreset"
+    )
+    $g = $true
 } else {
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
@@ -284,7 +292,7 @@ if (!$outputfolder){
 } elseif (Test-Path -Path $outputfolder) {
     $finaloutputpath = "$outputfolder\$outputfilename"
 } else {
-    Write-Host "Error: Output folder is invalid or doesnt exist!"
+    Write-Host "Error: Output folder is invalid or doesnt exist!" 
     exit
 }
 Write-Host "Output file path: $finaloutputpath"
@@ -292,12 +300,13 @@ Write-Host "Output file path: $finaloutputpath"
 # --- Start Encoding ---
 $starttime = Get-Date
 
-if ($videocodec -eq "libsvtav1"){
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 @svtencappVideoargsP1 @Parameters -b "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+if (($videocodec -eq "libsvtav1") -and ($g -eq $true)){
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtencappVideoargsP1 @Parameters
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
     ffmpeg -hide_banner @ffloglevel -y -i "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
     Remove-Item "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -Force -ErrorAction SilentlyContinue
 } else {
-    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
+    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
         Write-Host "=== === Start 1st pass === ==="
         & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
     }
