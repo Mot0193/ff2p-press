@@ -180,11 +180,16 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding"
+    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size"
+    
+    $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
+    Write-Host "isSvtav1encappAvailable = $isSvtav1encappAvailable"
+
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
         $videocodecpreset = "5"
     }
+    
     $ffvideoargsP1 = @(
         "-i", $video,
         "-an", 
@@ -225,7 +230,6 @@ if ($videocodec -eq "libx265"){
         #"-pass", "2",
         "-preset", "$videocodecpreset"
     )
-    $g = $true
 } else {
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
@@ -300,9 +304,12 @@ Write-Host "Output file path: $finaloutputpath"
 # --- Start Encoding ---
 $starttime = Get-Date
 
-if (($videocodec -eq "libsvtav1") -and ($g -eq $true)){
+if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
+    Write-Host "=== === Start 1st pass === ==="
     ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtencappVideoargsP1 @Parameters
+    Write-Host "=== === Start final pass === ==="
     ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    Write-Host "=== Encoding Audio ==="
     ffmpeg -hide_banner @ffloglevel -y -i "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
     Remove-Item "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -Force -ErrorAction SilentlyContinue
 } else {
