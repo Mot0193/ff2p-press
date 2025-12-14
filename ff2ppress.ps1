@@ -183,7 +183,6 @@ if ($videocodec -eq "libx265"){
     Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size"
     
     $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
-    Write-Host "isSvtav1encappAvailable = $isSvtav1encappAvailable"
 
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
@@ -292,8 +291,10 @@ if ($fancyrename){ # I just realized im converting all files to MP4, regardless 
 if (!$outputfolder){
     $videoFullPath = Resolve-Path -Path $video
     $finaloutputpath = "$(Split-Path -Path $videoFullPath)\$outputfilename"
+    $svtav1OutputTempPath = "$(Split-Path -Path $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } elseif (Test-Path -Path $outputfolder) {
     $finaloutputpath = "$outputfolder\$outputfilename"
+    $svtav1OutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
     Write-Host "Error: Output folder is invalid or doesnt exist!" 
     exit
@@ -307,10 +308,10 @@ if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
     ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtencappVideoargsP1 @Parameters
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b $outputfolder\"SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b $svtav1OutputTempPath
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner @ffloglevel -y -i $outputfolder\"SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
-    Remove-Item "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -Force -ErrorAction SilentlyContinue
+    ffmpeg -hide_banner @ffloglevel -y -i $svtav1OutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+    Remove-Item $svtav1OutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
         Write-Host "=== === Start 1st pass === ==="
