@@ -5,10 +5,11 @@ Supports several video encoders and advanced settings. By default, the video cod
 Videos will get output to the same folder as the input video by default, with this naming scheme: `compressed_<targeted_size>mib_<original_video_name>_<codec_used>_<preset_used>`
 
 ## ffmpeg installation
-Make sure to install an ffmpeg package that contains all the codecs this script supports. For example, if you're installing ffmpeg from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), you should install the "full" release:
+Make sure to install an ffmpeg package that contains all the codecs this script supports. For example SVT-AV1* is only in the "full" release of ffmpeg installed from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
 ```
 winget install ffmpeg
 ```
+*Though if youre using SvtAv1EncApp ffmpeg might not need support for SVT-AV1 directly, read more about libsvtav1 2-pass encoding below.
 
 ## Quick usage parameters:
 `-i <path_to_file>` Video file input
@@ -71,7 +72,7 @@ Default preset (for this script) is "p7"
 CBR (Constant bitrate) is also enabled.
 
 ## libsvtav1 (av1)
-IMPORTANT NOTE! ffmpeg does NOT support svt-av1 multi-pass mode. I only realized this VERY late into developing this script, and all this time ive been thinking 2-pass svt-av1 encoding worked with ffmpeg, but using 2-pass does NOTHING. For now this script will encode with only one pass when svt-av1 is chosen. Hopefully this will get added in ffmpeg eventually.
+IMPORTANT NOTE! ffmpeg does NOT support svt-av1 multi-pass mode. The script can still use 2pass encoding with svt-av1 by using SvtAv1EncApp in conjunction with ffmpeg, but that requires SvtAv1EncApp.exe to be added to path. You may [compile SvtAv1EncApp yourself](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Build-Guide.md) or get download it from somewhere else, for example from [here](https://jeremylee.sh/bins/). If SvtAv1EncApp.exe is not found, then the script will fallback to using ffmpeg normally and encode the video with only 1 pass.
 
 AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets, and many other fancy features that the original AOM-AV1 lacks. You may wish to test out some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), if you wish to get into the nitty gritty of this codec. You can use ff2ppress's -args argument to pass codec-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for an example)
 

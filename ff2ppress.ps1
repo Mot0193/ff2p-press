@@ -189,7 +189,7 @@ if ($videocodec -eq "libx265"){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
         $videocodecpreset = "5"
     }
-    
+
     $ffvideoargsP1 = @(
         "-i", $video,
         "-an", 
@@ -215,11 +215,11 @@ if ($videocodec -eq "libx265"){
         "--stats", "SvtAv1EncApp_2pass.log"
     )
 
-    if ($Parameters){
+    if ($extraarguments){
         $Parameters = $extraarguments -split ':' |
         ForEach-Object {
-            $parameter, $value = $_ -split '='
-            "--$parameter", $value
+            $name, $value = $_ -split '=', 2
+            "--$name", $value
         }
     }
 
@@ -227,7 +227,6 @@ if ($videocodec -eq "libx265"){
         "-i", $video,
         "-c:v", $videocodec,
         "-b:v", "$TargetVideoBitrate_kbps`k",
-        #"-pass", "2",
         "-preset", "$videocodecpreset"
     )
 } else {
@@ -308,9 +307,9 @@ if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
     ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtencappVideoargsP1 @Parameters
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b $outputfolder\"SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner @ffloglevel -y -i "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
+    ffmpeg -hide_banner @ffloglevel -y -i $outputfolder\"SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
     Remove-Item "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
