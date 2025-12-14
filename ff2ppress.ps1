@@ -180,25 +180,44 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. 1-PASS mode will be used instead, which may overshoot file targets"
+    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding"
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
         $videocodecpreset = "5"
     }
     $ffvideoargsP1 = @(
         "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-pass", "1",
-        "-preset", "$videocodecpreset"
+        "-an", 
+        "-f", "rawvideo",
+        "-"
     )
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        #"-pass", "2",
-        "-preset", "$videocodecpreset"
+    ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=coded_height -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=coded_width -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
+    if ($StartingVideoPixFmt -eq "yuv420p10le"){
+        $TargetVideoBitDepth = 10
+    } else { $TargetVideoBitDepth = 8 }
+
+    $svtencappVideoargsP1 = @(
+        "-i", "stdin",
+        "-w", $StartingVideoWidth,
+        "-h", $StartingVideoHeight,
+        "--rc", "1",
+        "--tbr", $TargetVideoBitrate_kbps,
+        "--preset", $videocodecpreset,
+        "--input-depth", $TargetVideoBitDepth,
+        "--passes" , "2",
+        "--stats", "SvtAv1EncApp_2pass.log"
     )
+
+    if ($Parameters){
+        $Parameters = $extraarguments -split ':' |
+        ForEach-Object {
+            $parameter, $value = $_ -split '='
+            "--$parameter", $value
+        }
+    }
 } else {
     Write-Host "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
@@ -270,17 +289,23 @@ if (!$outputfolder){
 }
 Write-Host "Output file path: $finaloutputpath"
 
+# --- Start Encoding ---
 $starttime = Get-Date
 
-if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
-    Write-Host "=== === Start 1st pass === ==="
-    # Write-Host "ffmpeg -hide_banner $ffvideoargsP1 $ffloglevel $ffrescaleargs $ffextraargs $ffvideonullargsP1"
-    & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
+if ($videocodec -eq "libsvtav1"){
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 @svtencappVideoargsP1 @Parameters -b "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    ffmpeg -hide_banner @ffloglevel -y -i "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath
+    Remove-Item "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4" -Force -ErrorAction SilentlyContinue
+} else {
+    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
+        Write-Host "=== === Start 1st pass === ==="
+        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
+    }
+
+    Write-Host "=== === Start final pass === ==="
+    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffextraargs @ffaudioargs $finaloutputpath
 }
 
-Write-Host "=== === Start final pass === ==="
-# Write-Host "ffmpeg -hide_banner $ffvideoargsP2 $ffloglevel $ffrescaleargs $ffextraargs $ffaudioargs $finaloutputpath"
-& ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffextraargs @ffaudioargs $finaloutputpath
 
 $endtime = Get-Date
 $elapsedtime = ([math]::Round(($endtime - $starttime).TotalSeconds, 2))
@@ -288,6 +313,7 @@ Write-Host "Encoding took $elapsedtime seconds in total ($($elapsedtime / 60) mi
 
 Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # deletes x265 log files
 Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue # deletes other 2pass ffmpeg log files
+Remove-Item ".\SvtAv1EncApp_2pass.log*" -Force -ErrorAction SilentlyContinue 
 
 $MiBresultsize = (Get-Item -Path $finaloutputpath).Length/1MB
 if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
