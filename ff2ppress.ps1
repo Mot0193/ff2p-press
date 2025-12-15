@@ -30,9 +30,10 @@ param(
     [Alias("args")] # pass extra, codec-specific arguments to ffmpeg. For example using "-args lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g lp=2:pin=4)
     $extraarguments,
 
-    $fancyrename = $true, # pass "0" for false when changing this. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
+    $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
-    $autoretry = $true # unused for now
+    [Alias("svtav1app")]
+    $isSvtav1encappAvailable = $true # disable to manually force 1-pass mode for svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and enable/disable 2pass for the codec accordingly
 )
 
 $StartingVideoSize_MiB = (Get-Item -Path $video).Length/1MB
@@ -153,14 +154,10 @@ if ($videocodec -eq "libx265"){
         "-multipass", "fullres"
     )
 } elseif ($videocodec -eq "libaom-av1"){
-    Write-Host "libaom-av1 Info! This library runs very slow, even with the highest speed/`"preset`". Have patience if you want to see results"
-    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the video will still encode. This seems to be just a bug. After the 1st pass is done you may see `"Output file is empty, nothing was encoded`". This shouldnt mean anything, double pass should still work as intended."
+    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the pass will still complete. Have patiance"
     if ($videocodecpreset -notin (0..8)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libaom-av1 `"cpu-used`" value, defaulting to cpu-used `"8`" for libaom-av1 (fastest setting)"
         $videocodecpreset = "8"
-    }
-    if ($videocodecpreset -in (0..3)){
-        Write-Host "!!! WARNING !!! Low libaom-av1 presets/`"cpu-used`" values makes the codec run EXTREMELY slow. Consider increasing this."
     }
 
     $ffvideoargsP1 = @(
@@ -180,9 +177,10 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size"
+    Write-Host "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size or provide worse video quality"
     
-    $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
+    if ($isSvtav1encappAvailable -eq $true ) { $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp) }
+    if ($isSvtav1encappAvailable -eq $false) { Write-Host "Warning: SvtAv1EncApp not found/disabled. Using SVT-AV1 in 1-pass mode" }
 
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
