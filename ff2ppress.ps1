@@ -27,8 +27,8 @@ param(
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
 
-    [Alias("args")] # pass extra, codec-specific arguments to ffmpeg. For example using "-args lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g lp=2:pin=4)
-    $extraarguments,
+    [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g lp=2:pin=4)
+    $encoderParameters,
 
     $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
@@ -201,7 +201,7 @@ if ($videocodec -eq "libx265"){
         $TargetVideoBitDepth = 10
     } else { $TargetVideoBitDepth = 8 }
 
-    $svtencappVideoargsP1 = @(
+    $svtav1appVideoargs = @(
         "-i", "stdin",
         "-w", $StartingVideoWidth,
         "-h", $StartingVideoHeight,
@@ -212,8 +212,8 @@ if ($videocodec -eq "libx265"){
         "--stats", "SvtAv1EncApp_2pass.log"
     )
 
-    if ($extraarguments){
-        $Parameters = $extraarguments -split ':' |
+    if ($encoderParameters){
+        $svtav1appParameters = $encoderParameters -split ':' |
         ForEach-Object {
             $name, $value = $_ -split '=', 2
             "--$name", $value
@@ -256,18 +256,18 @@ if (($videoheight -ne -1) -or ($videowidth -ne -1)){
     $ffrescaleargs = @()
 }
 
-if (($extraarguments)){
+if (($encoderParameters)){
     if($videocodec -eq "libaom-av1"){
         $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
     } else {
         $codecparam = $videocodec.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
     }
 
-    $ffextraargs = @(
-        "-$codecparam-params", "$extraarguments"
+    $ffEncoderParams = @(
+        "-$codecparam-params", "$encoderParameters"
     )
 } else {
-    $ffextraargs = @()
+    $ffEncoderParams = @()
 }
 
 if ($cleanlogs -eq 1){
@@ -289,12 +289,12 @@ if ($fancyrename){ # I just realized im converting all files to MP4, regardless 
 if (!$outputfolder){
     $videoFullPath = Resolve-Path -Path $video
     $finaloutputpath = "$(Split-Path -Path $videoFullPath)\$outputfilename"
-    $svtav1OutputTempPath = "$(Split-Path -Path $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $svtav1appOutputTempPath = "$(Split-Path -Path $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } elseif (Test-Path -Path $outputfolder) {
     $finaloutputpath = "$outputfolder\$outputfilename"
-    $svtav1OutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $svtav1appOutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
-    Write-Host "Error: Output folder is invalid or doesnt exist!" 
+    Write-Host "Error: Output folder is invalid or doesnt exist! Path: $outputfolder" 
     exit
 }
 Write-Host "Output file path: $finaloutputpath"
@@ -304,20 +304,20 @@ $starttime = Get-Date
 
 if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtencappVideoargsP1 @Parameters
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtencappVideoargsP1 @Parameters -b $svtav1OutputTempPath
+    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner @ffloglevel -y -i $svtav1OutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
-    Remove-Item $svtav1OutputTempPath -Force -ErrorAction SilentlyContinue
+    ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+    Remove-Item $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
         Write-Host "=== === Start 1st pass === ==="
-        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffextraargs @ffvideonullargsP1
+        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffEncoderParams @ffvideonullargsP1
     }
 
     Write-Host "=== === Start final pass === ==="
-    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffextraargs @ffaudioargs $finaloutputpath
+    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffEncoderParams @ffaudioargs $finaloutputpath
 }
 
 
