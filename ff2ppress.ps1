@@ -194,8 +194,8 @@ if ($videocodec -eq "libx265"){
         "-"
     )
 
-    $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=coded_height -of default=noprint_wrappers=1:nokey=1 $video
-    $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=coded_width -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 $video
     $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
     if ($StartingVideoPixFmt -eq "yuv420p10le"){
         $TargetVideoBitDepth = 10
