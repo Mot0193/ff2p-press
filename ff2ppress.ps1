@@ -58,7 +58,7 @@ if (($StartingAudioBitrate_kbps -le [int]$TargetAudioBitrate_kbps) -and $Startin
     $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
 }
 
-if ($TargetVideoSize_MiB){ # TODO Rename EVERYTHING what the fuck are these variable names
+if ($TargetVideoSize_MiB){
     [float]$TargetVideoSize_kbit = [float]$TargetVideoSize_MiB * 8388.608
     [float]$TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $VideoDuration_sec # the aproximate size of the whole audio
     [float]$TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $VideoDuration_sec # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
@@ -197,6 +197,9 @@ if ($videocodec -eq "libx265"){
     $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 $video
     $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 $video
     $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $video
+    $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
+    
     if ($StartingVideoPixFmt -eq "yuv420p10le"){
         $TargetVideoBitDepth = 10
     } else { $TargetVideoBitDepth = 8 }
@@ -228,6 +231,8 @@ if ($videocodec -eq "libx265"){
         "--tbr", $TargetVideoBitrate_kbps,
         "--preset", $videocodecpreset,
         "--input-depth", $TargetVideoBitDepth,
+        "--fps-num", $StartingVideoFrameNumerator,
+        "--fps-denom", $StartingVideoFrameDenominator,
         "--stats", "SvtAv1EncApp_2pass.log"
     )
 
@@ -269,7 +274,7 @@ if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
     $ffrescaleargs = @(
         "-vf", "scale=$([int]$TargetVideoWidth)`:$([int]$TargetVideoHeight)",
-        "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling # I am not sure if the scaling filter will get applied if ffmpeg is piping raw format video to svtav1encapp
+        "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
     )
 } else {
     $ffrescaleargs = @()
