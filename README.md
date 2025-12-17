@@ -45,7 +45,7 @@ libx265 supports these [presets](https://x265.readthedocs.io/en/master/presets.h
 The default preset is "medium"
 
 ## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
-In general, all hardware-accelerated codecs provide worse quality than their software (cpu) versions (in this case, compared to libx265). But they are A LOT faster, even at the highest quality/preset settings, though they can't usually beat a good software encoder in terms of quality.
+In general, hardware-accelerated codecs may provide worse quality than their software (cpu) versions (in this case, compared to libx265), but they are A LOT faster, even at the highest quality/preset settings, though they can't usually beat a good software encoder in terms of quality.
 For this reason, I wouldn't go below the max preset for nvenc, and some options are completely hardcoded with the use of a high quality preset in mind (such as enabling double pass with the full resolution. Normally, lower presets might disable this)
 Note: Nvenc handles 2-pass encoding differently from software encoders. It performs both passes in a single run, so ff2ppress will go straight to the "final pass" instead of showing a separate first pass.
 
@@ -72,9 +72,9 @@ Default preset (for this script) is "p7"
 CBR (Constant bitrate) is also enabled.
 
 ## libsvtav1 (av1)
-IMPORTANT NOTE! ffmpeg does NOT support svt-av1 multi-pass mode. The script can still use 2pass encoding with svt-av1 by using SvtAv1EncApp in conjunction with ffmpeg, but that requires SvtAv1EncApp.exe to be added to path. You may [compile SvtAv1EncApp yourself](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Build-Guide.md) or get download it from somewhere else, for example from [here](https://jeremylee.sh/bins/). If SvtAv1EncApp.exe is not found, then the script will fallback to using ffmpeg normally and encode the video with only 1 pass.
+IMPORTANT NOTE! ffmpeg does NOT support svt-av1 multi-pass mode. The script can still use 2pass encoding with svt-av1 by using SvtAv1EncApp in conjunction with ffmpeg, but that requires SvtAv1EncApp.exe to be added to path. You may [compile SvtAv1EncApp yourself](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Build-Guide.md) or download it from somewhere else, for example from [here](https://jeremylee.sh/bins/). If SvtAv1EncApp.exe is not found, then the script will fallback to using ffmpeg normally and encode the video with only 1 pass.
 
-AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets, and many other fancy features that the original AOM-AV1 lacks. You may wish to test out some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), if you wish to get into the nitty gritty of this codec. You can use ff2ppress's -param argument to pass codec-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for an example)
+AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets, and many other fancy features that the original AOM-AV1 lacks. If you wish to use some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), you can use ff2ppress's -params argument to pass codec-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for more info)
 
 libsvtav1 supports these [presets](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Parameters.md#options): 0, 1, ... 13, 0 being the slowest and 13 the fastest.
 You may be interested in reading Trix's [article(s)](https://wiki.x266.mov/blog/svt-av1-fourth-deep-dive-p1#presets-analysis-tldr) about SVT-AV1's presets and their efficiency. 
