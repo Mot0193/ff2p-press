@@ -13,9 +13,9 @@ param(
     [Alias("cvpreset")]
     $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8
     [Alias("h")]
-    $videoheight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The deafult values (-1) do not rescale the video
+    $inputTargetVideoHeight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The deafult values (-1) do not rescale the video
     [Alias("w")]
-    $videowidth = -1,
+    $inputTargetVideoWidth = -1,
     [Alias("brv")] 
     $TargetVideoBitrate_kbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
     [Alias("brlow")]
@@ -201,10 +201,29 @@ if ($videocodec -eq "libx265"){
         $TargetVideoBitDepth = 10
     } else { $TargetVideoBitDepth = 8 }
 
+    if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){ # are either sizes set?
+        if (($inputTargetVideoHeight -ne -1) -and ($inputTargetVideoWidth -eq -1)){ # is only the height set?
+            $TargetVideoWidth = $StartingVideoWidth / ($StartingVideoHeight / $inputTargetVideoHeight) # change the width accordingly
+            $TargetVideoHeight = $inputTargetVideoHeight
+        } 
+        elseif (($inputTargetVideoHeight -eq -1) -and ($inputTargetVideoWidth -ne -1)){ # is only the width set?
+            $TargetVideoHeight = $StartingVideoHeight / ($StartingVideoWidth / $inputTargetVideoWidth) # change the height accordingly
+            $TargetVideoWidth = $inputTargetVideoWidth
+        } 
+        else { # both are set
+            $TargetVideoHeight = $inputTargetVideoHeight
+            $TargetVideoWidth = $inputTargetVideoWidth
+        }
+        
+    } else { # theyre not set
+        $TargetVideoHeight = $StartingVideoHeight
+        $TargetVideoWidth = $StartingVideoWidth
+    }
+
     $svtav1appVideoargs = @(
         "-i", "stdin",
-        "-w", $StartingVideoWidth,
-        "-h", $StartingVideoHeight,
+        "-w", $TargetVideoWidth,
+        "-h", $TargetVideoHeight,
         "--rc", "1",
         "--tbr", $TargetVideoBitrate_kbps,
         "--preset", $videocodecpreset,
@@ -246,11 +265,11 @@ if ($audiocodec -in "libopus", "acc"){
     exit
 }
 
-if (($videoheight -ne -1) -or ($videowidth -ne -1)){
-    Write-Host "Rescaling the video to $videowidth`:$videoheight (width:height)"
+if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
+    Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
     $ffrescaleargs = @(
-        "-vf", "scale=$([int]$videowidth)`:$([int]$videoheight)",
-        "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
+        "-vf", "scale=$([int]$TargetVideoWidth)`:$([int]$TargetVideoHeight)",
+        "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling # I am not sure if the scaling filter will get applied if ffmpeg is piping raw format video to svtav1encapp
     )
 } else {
     $ffrescaleargs = @()
@@ -304,9 +323,9 @@ $starttime = Get-Date
 
 if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel @ffvideoargsP1 | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
+    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
     Write-Host "=== Encoding Audio ==="
     ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
     Remove-Item $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
