@@ -36,7 +36,7 @@ param(
     $isSvtav1encappAvailable = $true # disable to manually force 1-pass mode for svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and enable/disable 2pass for the codec accordingly
 )
 
-$StartingVideoSize_MiB = (Get-Item -Path $video).Length/1MB
+$StartingVideoSize_MiB = (Get-Item -LiteralPath $video).Length/1MB
 if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)){
     Write-Host "Error: target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
     exit
@@ -311,10 +311,10 @@ if ($fancyrename){ # I just realized im converting all files to MP4, regardless 
 }
 
 if (!$outputfolder){
-    $videoFullPath = Resolve-Path -Path $video
-    $finaloutputpath = "$(Split-Path -Path $videoFullPath)\$outputfilename"
-    $svtav1appOutputTempPath = "$(Split-Path -Path $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
-} elseif (Test-Path -Path $outputfolder) {
+    $videoFullPath = Resolve-Path -LiteralPath $video
+    $finaloutputpath = "$(Split-Path -LiteralPath $videoFullPath)\$outputfilename"
+    $svtav1appOutputTempPath = "$(Split-Path -LiteralPath $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+} elseif (Test-Path -LiteralPath $outputfolder) {
     $finaloutputpath = "$outputfolder\$outputfilename"
     $svtav1appOutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
@@ -333,7 +333,7 @@ if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
     Write-Host "=== Encoding Audio ==="
     ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
-    Remove-Item $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
         Write-Host "=== === Start 1st pass === ==="
@@ -353,7 +353,7 @@ Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # deletes x
 Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue # deletes other 2pass ffmpeg log files
 Remove-Item ".\SvtAv1EncApp_2pass.log*" -Force -ErrorAction SilentlyContinue 
 
-$MiBresultsize = (Get-Item -Path $finaloutputpath).Length/1MB
+$MiBresultsize = (Get-Item -LiteralPath $finaloutputpath).Length/1MB
 if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
     Write-Host "Warning! Resulting file size ($MiBresultsize MiB) is over the target size."
     Write-Host "Try decreasing the file size target, using -lowbr to lower the bitrate, or decreasing output resolution"
