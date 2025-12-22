@@ -23,7 +23,7 @@ param(
     # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
 
     [Alias("ca")]
-    $audiocodec = "libopus", # other available codecs: acc
+    $audiocodec = "libopus", # other available codecs: aac
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
 
@@ -260,7 +260,7 @@ $ffvideonullargsP1 = @(
     "-f", "null", "NUL"    
 )
 
-if ($audiocodec -in "libopus", "acc"){
+if ($audiocodec -in "libopus", "aac"){
     $ffaudioargs = @(
         "-c:a", $audiocodec,
         "-b:a", "$TargetAudioBitrate_kbps`k"
