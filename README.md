@@ -91,8 +91,8 @@ Default preset (for this script) is "8"
 Row multi-threading (-row-mt) is also enabled.
 
 ## Audio codecs: libopus (opus) / aac
-The default is libopus with 128k bitrate (or the input video's, if it's lower). If you're unsatisfied with how it sounds, try AAC. From what I read, opus does great at medium bitrates (64k, 128, 192k), but at very low bitrates you might want to try ACC. At high bitrates the difference between codecs is very minor.
+The default is libopus with 128k bitrate (or the input video's, if it's lower). If you're unsatisfied with how it sounds, try AAC. From what I read, opus does great at medium bitrates (64k, 128, 192k), but at very low bitrates you might want to try AAC. At high bitrates the difference between codecs is very minor.
 
 # Codec compatibility notice
 
-While newer codecs might offer better compression/file size efficiency, they can lack compatibility with devices and services. For example, WhatsApp only supports h264 and AAC out of these codecs, and AV1 can be hard to play on some devices, so depending on what you want to do with the video different codecs are best for different use-cases. In general, H265 and Opus should play fine on most, relatively modern devices. If you're sharing the video and people are complaining they can't play it, use H264 and ACC. AV1 is great, but it works best for archival purposes.
+While newer codecs might offer better compression/file size efficiency, they can lack compatibility with devices and services. For example, WhatsApp only supports h264 and AAC out of these codecs, and AV1 can be hard to play on some devices, so depending on what you want to do with the video different codecs are best for different use-cases. In general, H265 and Opus should play fine on most, relatively modern devices. If you're sharing the video and people are complaining they can't play it, use H264 and AAC. AV1 is great, but it works best for archival purposes.

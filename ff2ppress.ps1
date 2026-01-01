@@ -16,6 +16,8 @@ param(
     $inputTargetVideoHeight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The deafult values (-1) do not rescale the video
     [Alias("w")]
     $inputTargetVideoWidth = -1,
+    [Alias("trim")]
+    $TargetVideoTrim = -1, # optionally trim the video. This uses ffmpeg's -ss and -to. Timestamps use the format "HH:MM:SS", seperate starting time and end time with "-". Target bitrate will be correctly calculated based on the duration of the trim. Example usage: "-trim 0:0:0-0:5:0" (trim video from the start to the 5th minute); "-trim 0:2:20-0:4:10" (trim video from 2mins 20sec to 4min 10sec). 
     [Alias("brv")] 
     $TargetVideoBitrate_kbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
     [Alias("brlow")]
@@ -43,56 +45,62 @@ if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $Targe
 }
 
 # ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1
-$VideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $video
-$StartingVideoBitrate_kbps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
+$StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $video
+if (-not ($TargetVideoTrim -eq -1)){
+    $TargetVideoTrimStart, $TargetVideoTrimEnd = $TargetVideoTrim.Split("-")
+    [int]$TargetVideoTrimStart_hrs, [int]$TargetVideoTrimStart_min, [int]$TargetVideoTrimStart_sec = $TargetVideoTrimStart.Split(":")
+    [int]$TargetVideoTrimEnd_hrs, [int]$TargetVideoTrimEnd_min, [int]$TargetVideoTrimEnd_sec = $TargetVideoTrimEnd.Split(":")
+    $TargetVideoDuration_sec = (($TargetVideoTrimEnd_hrs * 3600) + ($TargetVideoTrimEnd_min * 60) + $TargetVideoTrimEnd_sec) - (($TargetVideoTrimStart_hrs * 3600) + ($TargetVideoTrimStart_min * 60) + $TargetVideoTrimStart_sec)
+} else {
+    $TargetVideoDuration_sec = $StartingVideoDuration_sec
+}
+
+[float]$StartingVideoBitrate_bps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
 $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
 if (-not $StartingAudioBitrate_kbps){
     Write-Host "Failed to (easily) get the audio bitrate of the video. Letting ffmpeg interpret audio bitrate (may not be accurate)"
     [int]$StartingAudioSize_KiB = (ffmpeg -i $video -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
-    $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $VideoDuration_sec
+    $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
 }
 
 
-if (($StartingAudioBitrate_kbps -le [int]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps){
+if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps){
     Write-Host "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
     $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
 }
 
 if ($TargetVideoSize_MiB){
     [float]$TargetVideoSize_kbit = [float]$TargetVideoSize_MiB * 8388.608
-    [float]$TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $VideoDuration_sec # the aproximate size of the whole audio
-    [float]$TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $VideoDuration_sec # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
+    [float]$TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec # the aproximate size of the whole audio
+    [float]$TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
 
     if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 0.2){
         Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
         # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-        $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $VideoDuration_sec
-        $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $VideoDuration_sec
+        $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
+        $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
     }
-
-    $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $VideoDuration_sec # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration
 
     if ($BitratePercentageLow -gt 0){
         $TargetVideoBitrate_kbps = $TargetVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
     }
 } elseif ($BitratePercentageLow -gt 0) {
-    $StartingVideoBitrate_bps = (ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
-    Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($StartingVideoBitrate_bps kbps) instead"
-    $TargetVideoBitrate_kbps = $StartingVideoBitrate_bps * (1 - ($BitratePercentageLow / 100))
+    Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($($StartingVideoBitrate_bps / 1000) kbps) instead"
+    $TargetVideoBitrate_kbps = $($StartingVideoBitrate_bps / 1000) * (1 - ($BitratePercentageLow / 100))
 } elseif ($TargetVideoBitrate_kbps -le 0){
     Write-Host "Error: Target bitrate is not valid (not set or not > 0)"
 }
 
-Write-Host "=== === ==="
-Write-Host ("Starting Video Duration / Size / Bitrate    : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$VideoDuration_sec, $StartingVideoSize_MiB, $([float]$StartingVideoBitrate_kbps * 0.0009765625))
-Write-Host ("Starting Audio Bitrate                      : {0:F2} kbps" -f $StartingAudioBitrate_kbps)
-if ($BitratePercentageLow -gt 0) { 
-Write-Host ("Target Video Size / Bitrate / Low%          : {0} MiB / {1:F2} kbps / {2}%" -f $TargetVideoSize_MiB, $TargetVideoBitrate_kbps, $BitratePercentageLow)}
-else {
-Write-Host ("Target Video Size / Bitrate                 : {0} MiB / {1:F2} kbps" -f $TargetVideoSize_MiB, $TargetVideoBitrate_kbps)
+if ($TargetVideoBitrate_kbps -ge $($StartingVideoBitrate_bps / 1000)){
+    Write-Host("Warning: Target video bitrate is higher than the starting bitrate. You probably used -trim, and in this case you can just trim the video with ffmpeg without re-encoding and the file will be below the target size. The script will NOT handle this, and it will re-encode the video with the higher target bitrate")
 }
-Write-Host ("Target Audio Bitrate                        : {0:F2} kbps" -f $TargetAudioBitrate_kbps)
-Write-Host "=== === ==="
+
+Write-Host "=== [FF2PPRESS Info] ==="
+Write-Host ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$StartingVideoDuration_sec, $StartingVideoSize_MiB, $([float]$StartingVideoBitrate_bps / 1000))
+Write-Host ("Starting Audio Bitrate                   : {0:F2} kbps" -f $StartingAudioBitrate_kbps)
+Write-Host ("Target Video Duration / Size / Bitrate   : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$TargetVideoDuration_sec, $TargetVideoSize_MiB, $TargetVideoBitrate_kbps)
+Write-Host ("Target Audio Bitrate                     : {0:F2} kbps" -f $TargetAudioBitrate_kbps)
+Write-Host "=== [FF2PPRESS Info] ==="
 
 # settings/arguments for each codec
 if ($videocodec -eq "libx265"){ 
@@ -280,6 +288,15 @@ if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     $ffrescaleargs = @()
 }
 
+if(-not ($TargetVideoTrim -eq -1)){
+    $fftrimargs = @(
+        "-ss", $TargetVideoTrimStart,
+        "-to", $TargetVideoTrimEnd
+    )
+} else {
+    $ffrescaleargs = @()
+}
+
 if (($encoderParameters)){
     if($videocodec -eq "libaom-av1"){
         $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
@@ -328,20 +345,20 @@ $starttime = Get-Date
 
 if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
-    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs @fftrimargs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
+    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs @fftrimargs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+    ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? @fftrimargs -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
     Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
         Write-Host "=== === Start 1st pass === ==="
-        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @ffEncoderParams @ffvideonullargsP1
+        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @fftrimargs @ffEncoderParams @ffvideonullargsP1
     }
 
     Write-Host "=== === Start final pass === ==="
-    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @ffEncoderParams @ffaudioargs $finaloutputpath
+    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @fftrimargs @ffEncoderParams @ffaudioargs $finaloutputpath
 }
 
 
