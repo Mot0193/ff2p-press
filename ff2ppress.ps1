@@ -212,23 +212,15 @@ if ($videocodec -eq "libx265"){
         $TargetVideoBitDepth = 10
     } else { $TargetVideoBitDepth = 8 }
 
-    if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){ # are either sizes set?
-        if (($inputTargetVideoHeight -ne -1) -and ($inputTargetVideoWidth -eq -1)){ # is only the height set?
-            $TargetVideoWidth = $StartingVideoWidth / ($StartingVideoHeight / $inputTargetVideoHeight) # change the width accordingly
-            $TargetVideoHeight = $inputTargetVideoHeight
-        } 
-        elseif (($inputTargetVideoHeight -eq -1) -and ($inputTargetVideoWidth -ne -1)){ # is only the width set?
-            $TargetVideoHeight = $StartingVideoHeight / ($StartingVideoWidth / $inputTargetVideoWidth) # change the height accordingly
-            $TargetVideoWidth = $inputTargetVideoWidth
-        } 
-        else { # both are set
-            $TargetVideoHeight = $inputTargetVideoHeight
-            $TargetVideoWidth = $inputTargetVideoWidth
-        }
-        
-    } else { # theyre not set
-        $TargetVideoHeight = $StartingVideoHeight
-        $TargetVideoWidth = $StartingVideoWidth
+    $TargetVideoHeight = $inputTargetVideoHeight
+    $TargetVideoWidth  = $inputTargetVideoWidth
+    if ($TargetVideoHeight -eq -1){$TargetVideoHeight = $StartingVideoHeight}
+    if ($TargetVideoWidth -eq -1){$TargetVideoWidth = $StartingVideoWidth}
+
+    if ($inputTargetVideoHeight -ne -1 -and $inputTargetVideoWidth -eq -1){
+        $TargetVideoWidth = $StartingVideoWidth / ($StartingVideoHeight / $inputTargetVideoHeight)
+    } elseif ($inputTargetVideoWidth -ne -1 -and $inputTargetVideoHeight -eq -1){
+        $TargetVideoHeight = $StartingVideoHeight / ($StartingVideoWidth / $inputTargetVideoWidth)
     }
 
     $svtav1appVideoargs = @(
@@ -281,20 +273,20 @@ if ($audiocodec -in "libopus", "aac"){
 if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
     $ffrescaleargs = @(
-        "-vf", "scale=$([int]$TargetVideoWidth)`:$([int]$TargetVideoHeight)",
+        "-vf", "scale=$([int]$inputTargetVideoWidth)`:$([int]$inputTargetVideoHeight)",
         "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
     )
 } else {
     $ffrescaleargs = @()
 }
 
-if(-not ($TargetVideoTrim -eq -1)){
+if (-not ($TargetVideoTrim -eq -1)){
     $fftrimargs = @(
         "-ss", $TargetVideoTrimStart,
         "-to", $TargetVideoTrimEnd
     )
 } else {
-    $ffrescaleargs = @()
+    $fftrimargs = @()
 }
 
 if (($encoderParameters)){
