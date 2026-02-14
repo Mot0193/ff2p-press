@@ -28,6 +28,7 @@ param(
     $audiocodec = "libopus", # other available codecs: aac
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
+    $ForceAudioTranscoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
 
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
     $encoderParameters,
@@ -67,6 +68,11 @@ if (-not $StartingAudioBitrate_kbps){
 if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps){
     Write-Host "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
     $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
+
+    if (-not $ForceAudioTranscoding){
+        Write-Host "Copying audio, wont transcode. The bitrate is already below the target."
+        $audiocodec = "copy"
+    }
 }
 
 if ($TargetVideoSize_MiB){
@@ -260,7 +266,7 @@ $ffvideonullargsP1 = @(
     "-f", "null", "NUL"    
 )
 
-if ($audiocodec -in "libopus", "aac"){
+if ($audiocodec -in "libopus", "aac", "copy"){
     $ffaudioargs = @(
         "-c:a", $audiocodec,
         "-b:a", "$TargetAudioBitrate_kbps`k"
@@ -269,6 +275,7 @@ if ($audiocodec -in "libopus", "aac"){
     Write-Host "Error: Unkown/Unavailable audio codec. Check the available codecs in readme"
     exit
 }
+pause
 
 if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
