@@ -38,6 +38,7 @@ param(
     [Alias("svtav1app")]
     $isSvtav1encappAvailable = $true # disable to manually force 1-pass mode for svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and enable/disable 2pass for the codec accordingly
 )
+Set-Location $PSScriptRoot
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $video).Length/1MB
 if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)){
@@ -275,7 +276,6 @@ if ($audiocodec -in "libopus", "aac", "copy"){
     Write-Host "Error: Unkown/Unavailable audio codec. Check the available codecs in readme"
     exit
 }
-pause
 
 if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
