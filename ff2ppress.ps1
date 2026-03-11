@@ -46,7 +46,7 @@ Set-Location $PSScriptRoot
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $video).Length/1MB
 if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)){
-    Write-Error "Error: target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
+    Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
     exit
 }
 
@@ -64,7 +64,7 @@ if (-not ($TargetVideoTrim -eq -1)){
 [float]$StartingVideoBitrate_bps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
 $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
 if (-not $StartingAudioBitrate_kbps){
-    Write-Warning "Warning! Failed to (easily) get the audio bitrate of the video. Letting ffmpeg interpret audio bitrate (may not be accurate)"
+    Write-Warning "Failed to (easily) get the audio bitrate of the video. Letting ffmpeg interpret audio bitrate (may not be accurate)"
     [int]$StartingAudioSize_KiB = (ffmpeg -i $video -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
     $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
 }
@@ -72,10 +72,10 @@ if (-not $StartingAudioBitrate_kbps){
 
 if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps){
     if (-not $ForceAudioTranscoding){
-        Write-Warning "Warning! Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
+        Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
         $audiocodec = "copy"
     } else {
-        Write-Warning "Warning! Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
+        Write-Warning "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
         $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
     }
 }
@@ -99,11 +99,11 @@ if ($TargetVideoSize_MiB){
     Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($($StartingVideoBitrate_bps / 1000) kbps) instead"
     $TargetVideoBitrate_kbps = $($StartingVideoBitrate_bps / 1000) * (1 - ($BitratePercentageLow / 100))
 } elseif ($TargetVideoBitrate_kbps -le 0){
-    Write-Error "Error: Target bitrate is not valid (not set or not > 0)"
+    Write-Error "Target bitrate is not valid (not set or not > 0)"
 }
 
 if ($TargetVideoBitrate_kbps -ge $($StartingVideoBitrate_bps / 1000)){
-    Write-Warning("Warning: Target video bitrate is higher than the starting bitrate. You probably used -trim, and in this case you can just trim the video with ffmpeg without re-encoding and the file will be below the target size. The script will NOT handle this, and it will re-encode the video with the higher target bitrate")
+    Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, and in this case you can just trim the video with ffmpeg without re-encoding and the file will be below the target size. The script will NOT handle this, and it will re-encode the video with the higher target bitrate")
 }
 
 $EncodingAttempts = 0
@@ -214,10 +214,10 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Warning "!!! WARNING !!! SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size or provide worse video quality"
+    Write-Warning "SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size or provide worse video quality"
     
     if ($isSvtav1encappAvailable -eq $true ) { $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp) }
-    if ($isSvtav1encappAvailable -eq $false) { Write-Warning "Warning: SvtAv1EncApp not found/disabled. Using SVT-AV1 in 1-pass mode" }
+    if ($isSvtav1encappAvailable -eq $false) { Write-Warning "SvtAv1EncApp not found/disabled. Using SVT-AV1 in 1-pass mode" }
 
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
@@ -267,7 +267,7 @@ if ($videocodec -eq "libx265"){
         "-preset", "$videocodecpreset"
     )
 } else {
-    Write-Error "Error: Unkown/Unavailable video codec. Check the available codecs in readme"
+    Write-Error "Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
 }
 
@@ -282,7 +282,7 @@ if ($audiocodec -in "libopus", "aac", "copy"){
         "-b:a", "$TargetAudioBitrate_kbps`k"
     )
 } else {
-    Write-Error "Error: Unkown/Unavailable audio codec. Check the available codecs in readme"
+    Write-Error "Unkown/Unavailable audio codec. Check the available codecs in readme"
     exit
 }
 
@@ -343,7 +343,7 @@ if (!$outputfolder){
     $finaloutputpath = "$outputfolder\$outputfilename"
     $svtav1appOutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
-    Write-Error "Error: Output folder is invalid or doesnt exist! Path: $outputfolder" 
+    Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
     exit
 }
 Write-Host "Output file path: $finaloutputpath"
@@ -373,7 +373,7 @@ if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
 $MiBresultsize = (Get-Item -LiteralPath $finaloutputpath).Length/1MB
 if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
     if ($RetryEncodingIfTargetNotMet){
-        Write-Warning "Warning! Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
+        Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
         $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
         Remove-Item -LiteralPath $finaloutputpath -Force -ErrorAction SilentlyContinue
         
@@ -383,7 +383,7 @@ if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
         $TargetVideoBitrate_kbps = $TargetVideoBitrate_kbps * (1 - ($CurrentRetryEncodingPercentageLowAmount / 100))
         Write-Host "=== === === Attempt $($EncodingAttempts+1) === === ==="
     } else {
-        Write-Warning "Warning! Resulting file size ($MiBresultsize MiB) is over the target size. Automatic encode retrying is disabled! Use -retry 1 if you want to enable it"
+        Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Automatic encode retrying is disabled! Use -retry 1 if you want to enable it"
         break
     }
 } else {
