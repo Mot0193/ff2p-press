@@ -25,7 +25,7 @@ param(
     # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
 
     [Alias("ca")]
-    $audiocodec = "libopus", # other available codecs: aac
+    $SelectedAudioCodec = "libopus", # other available codecs: aac
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
     $ForceAudioTranscoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
@@ -50,6 +50,7 @@ if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $Targe
     exit
 }
 
+# Probe duration and calculate the duration of the video
 # ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1
 $StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $video
 if (-not ($TargetVideoTrim -eq -1)){
@@ -61,6 +62,7 @@ if (-not ($TargetVideoTrim -eq -1)){
     $TargetVideoDuration_sec = $StartingVideoDuration_sec
 }
 
+# Probe video and audio bitrates
 [float]$StartingVideoBitrate_bps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
 $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
 if (-not $StartingAudioBitrate_kbps){
@@ -68,16 +70,17 @@ if (-not $StartingAudioBitrate_kbps){
     [int]$StartingAudioSize_KiB = (ffmpeg -i $video -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
     $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
 }
+$TargetAudioCodec = $SelectedAudioCodec
 
 
 if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps){
     if (-not $ForceAudioTranscoding){
         Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
-        $audiocodec = "copy"
+        $TargetAudioCodec = "copy"
     } else {
         Write-Warning "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
-        $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
     }
+    $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
 }
 
 if ($TargetVideoSize_MiB){
@@ -88,6 +91,7 @@ if ($TargetVideoSize_MiB){
     if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 0.2){
         Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
         # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
+        $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earler in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once agian
         $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
         $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
     }
@@ -276,9 +280,9 @@ $ffvideonullargsP1 = @(
     "-f", "null", "NUL"    
 )
 
-if ($audiocodec -in "libopus", "aac", "copy"){
+if ($TargetAudioCodec -in "libopus", "aac", "copy"){
     $ffaudioargs = @(
-        "-c:a", $audiocodec,
+        "-c:a", $TargetAudioCodec,
         "-b:a", "$TargetAudioBitrate_kbps`k"
     )
 } else {
