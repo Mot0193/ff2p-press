@@ -37,6 +37,8 @@ param(
     $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
     [Alias("svtav1app")]
     $isSvtav1encappAvailable = $true, # disable to manually force 1-pass mode for svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and enable/disable 2pass for the codec accordingly
+    [Alias("nvenctune")]
+    $NvencTuneLevel = "hq",
     [Alias("retry")]
     $RetryEncodingIfTargetNotMet = $false, # enable to make the script automatically retry to encode the video if the resulting file is over the size. It will retry multiple times while lowering the bitrate each time
     [Alias("retrylow")]
@@ -171,19 +173,8 @@ if ($videocodec -eq "libx265"){
         Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
         $videocodecpreset = "p7"
     }
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset",
-        "-rc", "cbr",
-        "-tune", "hq",
-        "-multipass", "fullres"
-    )
-} elseif ($videocodec -eq "h264_nvenc"){
-    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
-        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
-        $videocodecpreset = "p7"
+    if ($NvencTuneLevel -eq "uhq"){
+        Write-Warning "Using UHQ (ultra high quality) tuning for hevc_nvenc. The encoding time will be slower!"
     }
     $ffvideoargsP2 = @(
         "-i", $video,
@@ -191,7 +182,25 @@ if ($videocodec -eq "libx265"){
         "-b:v", "$TargetVideoBitrate_kbps`k",
         "-preset", "$videocodecpreset",
         "-rc", "cbr",
-        "-tune", "hq",
+        "-tune", "$NvencTuneLevel",
+        "-multipass", "fullres"
+    )
+} elseif ($videocodec -eq "h264_nvenc"){
+    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
+        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
+        $videocodecpreset = "p7"
+    }
+    if ($NvencTuneLevel -eq "uhq"){
+        Write-Warning "UHQ (ultra high quality) tuning is not available for h264_nvenc. Falling back to HQ"
+        $NvencTuneLevel = "hq"
+    }
+    $ffvideoargsP2 = @(
+        "-i", $video,
+        "-c:v", $videocodec,
+        "-b:v", "$TargetVideoBitrate_kbps`k",
+        "-preset", "$videocodecpreset",
+        "-rc", "cbr",
+        "-tune", "$NvencTuneLevel",
         "-multipass", "fullres"
     )
 } elseif ($videocodec -eq "libaom-av1"){
