@@ -29,6 +29,7 @@ param(
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
     $ForceAudioTranscoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
+    $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accomodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
 
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon seperated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
     $encoderParameters,
@@ -91,11 +92,19 @@ if ($TargetVideoSize_MiB){
     [float]$TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # the bitrate for the video would be the targeted size - aproximate audio size, all divided by the duration 
 
     if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 0.2){
-        Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
-        # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-        $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earler in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once agian
-        $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
-        $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
+        if (-not $PrioritizeAudioBitrate){
+            Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
+            # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
+            $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earler in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once agian
+            $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
+            $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
+        } else {
+           Write-Warning "Audio WILL be over 20% of the target size because you enabled PrioritizeAudioBitrate."
+            if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 1){
+                Write-Error "Audio would take up more than the entire video target. Either disable PrioritizeAudioBitrate or lower the audio bitrate!"
+                exit
+            }
+        }
         $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec
     }
 
