@@ -96,6 +96,7 @@ if ($TargetVideoSize_MiB){
         $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earler in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once agian
         $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
         $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
+        $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec
     }
 
     if ($BitratePercentageLow -gt 0){
