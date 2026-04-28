@@ -272,7 +272,8 @@ if ($videocodec -eq "libx265"){
         "--input-depth", $TargetVideoBitDepth,
         "--fps-num", $StartingVideoFrameNumerator,
         "--fps-denom", $StartingVideoFrameDenominator,
-        "--stats", "SvtAv1EncApp_2pass.log"
+        "--stats", "SvtAv1EncApp_2pass.log",
+        "--lookahead", "42" # Force lookahead to 42, as the svtav1 warning tells you to. No clue if this automatically gets set, or what the benifit is, but im setting it anyways. "Svt[warn]: For CRF or 2PASS RC mode, the maximum needed Lookahead distance is 42. Force the look_ahead_distance to be 42"
     )
 
     if ($encoderParameters){
