@@ -237,59 +237,64 @@ if ($videocodec -eq "libx265"){
         "-row-mt", "1"
     )
 } elseif ($videocodec -eq "libsvtav1"){
-    Write-Warning "SVT-AV1 does not support 2-pass mode with ffmpeg. If you have SvtAv1EncApp added to path, the script will attempt to use it in conjunction with ffmpeg to handle 2-pass encoding. If it cant find SvtAv1EncApp, the script will just do 1-pass, which may overshoot the file target size or provide worse video quality"
-    
-    if ($isSvtav1encappAvailable -eq $true ) { $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp) }
-    if ($isSvtav1encappAvailable -eq $false) { Write-Warning "SvtAv1EncApp not found/disabled. Using SVT-AV1 in 1-pass mode" }
-
     if ($videocodecpreset -notin (-1..13)){
         Write-Host "Preset `"$videocodecpreset`" does not match for a libsvtav1 preset. Defaulting to prest `"5`""
         $videocodecpreset = "5"
     }
 
-    $ffvideoargsP1 = @(
-        "-i", $video,
-        "-an", 
-        "-f", "rawvideo",
-        "-"
-    )
-
-    $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
-    $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $video
-    $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
-    
-    if ($StartingVideoPixFmt -eq "yuv420p10le"){
-        $TargetVideoBitDepth = 10
-    } else { $TargetVideoBitDepth = 8 }
-
-    $svtav1appVideoargs = @(
-        "-i", "stdin",
-        "-w", $TargetVideoWidth,
-        "-h", $TargetVideoHeight,
-        "--rc", "1",
-        "--tbr", $TargetVideoBitrate_kbps,
-        "--preset", $videocodecpreset,
-        "--input-depth", $TargetVideoBitDepth,
-        "--fps-num", $StartingVideoFrameNumerator,
-        "--fps-denom", $StartingVideoFrameDenominator,
-        "--stats", "SvtAv1EncApp_2pass.log",
-        "--lookahead", "42" # Force lookahead to 42, as the svtav1 warning tells you to. No clue if this automatically gets set, or what the benifit is, but im setting it anyways. "Svt[warn]: For CRF or 2PASS RC mode, the maximum needed Lookahead distance is 42. Force the look_ahead_distance to be 42"
-    )
-
-    if ($encoderParameters){
-        $svtav1appParameters = $encoderParameters -split ':' |
-        ForEach-Object {
-            $name, $value = $_ -split '=', 2
-            "--$name", $value
-        }
+    if ($isSvtav1encappAvailable -eq $true){
+        $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
     }
 
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset"
-    )
+    if ($isSvtav1encappAvailable -eq $false){ 
+        Write-Host "SvtAv1EncApp is not found/disabled, using SVT-AV1 with FFmpeg."
+        Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. If you use a version below 8.1, the video will just encode twice with 1 pass, wasting your time. Please make sure to update FFmpeg or use SvtAv1EncApp as the readme mentions."
+        $ffvideoargsP1 = @(
+            "-i", $video,
+            "-c:v", $videocodec,
+            "-b:v", "$TargetVideoBitrate_kbps`k",
+            "-preset", "$videocodecpreset",
+            "-pass", "1"
+        )
+        $ffvideoargsP2 = @(
+            "-i", $video,
+            "-c:v", $videocodec,
+            "-b:v", "$TargetVideoBitrate_kbps`k",
+            "-preset", "$videocodecpreset",
+            "-pass", "2"
+        )
+        
+    } else {
+        $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
+        $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $video
+        $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
+        
+        if ($StartingVideoPixFmt -eq "yuv420p10le"){
+            $TargetVideoBitDepth = 10
+        } else { $TargetVideoBitDepth = 8 }
+
+        $svtav1appVideoargs = @(
+            "-i", "stdin",
+            "-w", $TargetVideoWidth,
+            "-h", $TargetVideoHeight,
+            "--rc", "1",
+            "--tbr", $TargetVideoBitrate_kbps,
+            "--preset", $videocodecpreset,
+            "--input-depth", $TargetVideoBitDepth,
+            "--fps-num", $StartingVideoFrameNumerator,
+            "--fps-denom", $StartingVideoFrameDenominator,
+            "--stats", "SvtAv1EncApp_2pass.log",
+            "--lookahead", "42" # Force lookahead to 42, as the svtav1 warning tells you to. No clue if this automatically gets set, or what the benifit is, but im setting it anyways. "Svt[warn]: For CRF or 2PASS RC mode, the maximum needed Lookahead distance is 42. Force the look_ahead_distance to be 42"
+        )
+
+        if ($encoderParameters){
+            $svtav1appParameters = $encoderParameters -split ':' |
+            ForEach-Object {
+                $name, $value = $_ -split '=', 2
+                "--$name", $value
+            }
+        }
+    }
 } else {
     Write-Error "Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
@@ -385,7 +390,7 @@ if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? @fftrimargs -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
     Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
-    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc", "libsvtav1")){
+    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
         Write-Host "=== === Start 1st pass === ==="
         & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @fftrimargs @ffEncoderParams @ffvideonullargsP1
     }
