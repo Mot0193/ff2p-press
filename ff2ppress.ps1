@@ -35,11 +35,10 @@ param(
     $encoderParameters,
 
     $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
-    $cleanlogs = $true, # if disabled (0), this removes the "-loglevel error" and "-stats" arguments from ffmpeg, giving you more information about the video
     [Alias("svtav1app")]
-    $isSvtav1encappAvailable = $true, # disable to manually force 1-pass mode for svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and enable/disable 2pass for the codec accordingly
+    $isSvtav1encappAvailable = $true, # disable to manually force the use of svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and use it instead of ffmpeg's svt-av1 version.
     [Alias("nvenctune")]
-    $NvencTuneLevel = "hq",
+    $NvencTuneLevel = "hq", # you may optionally change the -tune paramterer when using nvenc encoders. This was mainly added to test the uhq tuning level only available for hevc_nvenc for certain gpus.
     [Alias("retry")]
     $RetryEncodingIfTargetNotMet = $false, # enable to make the script automatically retry to encode the video if the resulting file is over the size. It will retry multiple times while lowering the bitrate each time
     [Alias("retrylow")]
@@ -147,68 +146,23 @@ if ($inputTargetVideoHeight -ne -1 -and $inputTargetVideoWidth -eq -1){
     $TargetVideoHeight = $StartingVideoHeight / ($StartingVideoWidth / $inputTargetVideoWidth)
 }
 
-# settings/arguments for each codec
-if ($videocodec -eq "libx265"){ 
-    $ffvideoargsP1 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset"
-        "-x265-params", "pass=1:log-level=1"
-    )
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset"
-        "-x265-params", "pass=2:log-level=1"
-    )
-} elseif ($videocodec -eq "libx264"){
-    $ffvideoargsP1 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset"
-        "-pass", "1"
-    )
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset"
-        "-pass", "2"
-    )
-} elseif ($videocodec -eq "hevc_nvenc"){
+# Cerain codecs may need extra arguments to work properly or to use extra features. They are set here:
+#if ($videocodec -in "libx265", "libx254"){$FFmpegExtraVideoArgs = @()} else # I dont really need this
+
+if ($videocodec -in "hevc_nvenc", "h264_nvenc"){
     if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
         Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
         $videocodecpreset = "p7"
     }
     if ($NvencTuneLevel -eq "uhq"){
-        Write-Warning "Using UHQ (ultra high quality) tuning for hevc_nvenc. The encoding time will be slower!"
+        if ($videocodec -eq "h264_nvenc") {
+            Write-Warning "UHQ (ultra high quality) tuning for h264_nvenc is unavailable. Using HQ tuning instead."
+            $NvencTuneLevel = "hq"
+        } else {
+            Write-Warning "Using UHQ (ultra high quality) tuning for hevc_nvenc. The encoding time will be slower!"
+        }
     }
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset",
-        "-rc", "cbr",
-        "-tune", "$NvencTuneLevel",
-        "-multipass", "fullres"
-    )
-} elseif ($videocodec -eq "h264_nvenc"){
-    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
-        Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
-        $videocodecpreset = "p7"
-    }
-    if ($NvencTuneLevel -eq "uhq"){
-        Write-Warning "UHQ (ultra high quality) tuning is not available for h264_nvenc. Falling back to HQ"
-        $NvencTuneLevel = "hq"
-    }
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-preset", "$videocodecpreset",
+    $FFmpegExtraVideoArgs = @(
         "-rc", "cbr",
         "-tune", "$NvencTuneLevel",
         "-multipass", "fullres"
@@ -220,19 +174,7 @@ if ($videocodec -eq "libx265"){
         $videocodecpreset = "8"
     }
 
-    $ffvideoargsP1 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-pass", "1",
-        "-cpu-used", "$videocodecpreset",
-        "-row-mt", "1"
-    )
-    $ffvideoargsP2 = @(
-        "-i", $video,
-        "-c:v", $videocodec,
-        "-b:v", "$TargetVideoBitrate_kbps`k",
-        "-pass", "2",
+    $FFmpegExtraVideoArgs = @(
         "-cpu-used", "$videocodecpreset",
         "-row-mt", "1"
     )
@@ -246,25 +188,10 @@ if ($videocodec -eq "libx265"){
         $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
     }
 
-    if ($isSvtav1encappAvailable -eq $false){ 
-        Write-Host "SvtAv1EncApp is not found/disabled, using SVT-AV1 with FFmpeg."
-        Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. If you use a version below 8.1, the video will just encode twice with 1 pass, wasting your time. Please make sure to update FFmpeg or use SvtAv1EncApp as the readme mentions."
-        $ffvideoargsP1 = @(
-            "-i", $video,
-            "-c:v", $videocodec,
-            "-b:v", "$TargetVideoBitrate_kbps`k",
-            "-preset", "$videocodecpreset",
-            "-pass", "1"
-        )
-        $ffvideoargsP2 = @(
-            "-i", $video,
-            "-c:v", $videocodec,
-            "-b:v", "$TargetVideoBitrate_kbps`k",
-            "-preset", "$videocodecpreset",
-            "-pass", "2"
-        )
-        
+    if ($isSvtav1encappAvailable -eq $false){
+        Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. If you use a version below 8.1, the video will just encode twice with 1 pass, wasting your time. Make sure youre on the latest FFmpeg version or use SvtAv1EncApp as the readme mentions."
     } else {
+        Write-Warning "SvtAv1EncApp was found! Consider updating FFmpeg to version 8.1 so you can use 2-pass encoding via FFmpeg instead if you haven't already. FFmpeg's svt-av1 version in 2-pass mode may be faster than using SvtAv1EncApp via this script."
         $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
         $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $video
         $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
@@ -300,13 +227,20 @@ if ($videocodec -eq "libx265"){
     exit
 }
 
-$ffvideonullargsP1 = @(
-    "-an",
-    "-f", "null", "NUL"    
+# FFmpeg "Base" Video arguments. Common arguments which can/should be set for any codec via ffmpeg
+$FFmpegBaseVideoArgs = @(
+    "-i", $video,
+    "-c:v", $videocodec,
+    "-b:v", "$TargetVideoBitrate_kbps`k",
+    "-preset", "$videocodecpreset"
+)
+
+$FFmpegNullP1 = @(
+    "NUL"    
 )
 
 if ($TargetAudioCodec -in "libopus", "aac", "copy"){
-    $ffaudioargs = @(
+    $FFmpegAudioArgs = @(
         "-c:a", $TargetAudioCodec,
         "-b:a", "$TargetAudioBitrate_kbps`k"
     )
@@ -317,21 +251,21 @@ if ($TargetAudioCodec -in "libopus", "aac", "copy"){
 
 if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)){
     Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
-    $ffrescaleargs = @(
+    $FFmpegVideoRescaleArgs = @(
         "-vf", "scale=$([int]$inputTargetVideoWidth)`:$([int]$inputTargetVideoHeight)",
         "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
     )
 } else {
-    $ffrescaleargs = @()
+    $FFmpegVideoRescaleArgs = @()
 }
 
 if (-not ($TargetVideoTrim -eq -1)){
-    $fftrimargs = @(
+    $FFmpegTrimArgs = @(
         "-ss", $TargetVideoTrimStart,
         "-to", $TargetVideoTrimEnd
     )
 } else {
-    $fftrimargs = @()
+    $FFmpegTrimArgs = @()
 }
 
 if (($encoderParameters)){
@@ -341,20 +275,11 @@ if (($encoderParameters)){
         $codecparam = $videocodec.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
     }
 
-    $ffEncoderParams = @(
+    $FFmpegCodecParams = @(
         "-$codecparam-params", "$encoderParameters"
     )
 } else {
-    $ffEncoderParams = @()
-}
-
-if ($cleanlogs -eq 1){
-    $ffloglevel = @(
-        "-loglevel", "error",
-        "-stats"
-    )
-} else {
-    $ffloglevel = @()
+    $FFmpegCodecParams = @()
 }
 
 if ($fancyrename){ # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
@@ -366,16 +291,16 @@ if ($fancyrename){ # I just realized im converting all files to MP4, regardless 
 
 if (!$outputfolder){
     $videoFullPath = Resolve-Path -LiteralPath $video
-    $finaloutputpath = "$(Split-Path -LiteralPath $videoFullPath)\$outputfilename"
+    $FinalOutputFile = "$(Split-Path -LiteralPath $videoFullPath)\$outputfilename"
     $svtav1appOutputTempPath = "$(Split-Path -LiteralPath $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } elseif (Test-Path -LiteralPath $outputfolder) {
-    $finaloutputpath = "$outputfolder\$outputfilename"
+    $FinalOutputFile = "$outputfolder\$outputfilename"
     $svtav1appOutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
     Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
     exit
 }
-Write-Host "Output file path: $finaloutputpath"
+Write-Host "Output file path: $FinalOutputFile"
 
 # --- Start Encoding ---
 $EncodeAttemptStartTime = Get-Date
@@ -383,28 +308,35 @@ $EncodingAttempts++
 
 if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
-    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs @fftrimargs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+    ffmpeg -hide_banner -loglevel error -i $video -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner @ffloglevel -i $video -an -f rawvideo @ffrescaleargs @fftrimargs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
+    ffmpeg -hide_banner -loglevel error -i $video -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
+
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner @ffloglevel -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? @fftrimargs -c:v copy @ffaudioargs $finaloutputpath # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+    ffmpeg -hide_banner -loglevel error -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? @FFmpegTrimArgs -c:v copy @FFmpegAudioArgs $FinalOutputFile # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+
     Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
     if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
         Write-Host "=== === Start 1st pass === ==="
-        & ffmpeg -hide_banner @ffvideoargsP1 @ffloglevel @ffrescaleargs @fftrimargs @ffEncoderParams @ffvideonullargsP1
-    }
+        ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null @FFmpegNullP1
 
-    Write-Host "=== === Start final pass === ==="
-    & ffmpeg -hide_banner @ffvideoargsP2 @ffloglevel @ffrescaleargs @fftrimargs @ffEncoderParams @ffaudioargs $finaloutputpath
+        Write-Host "=== === Start final pass === ==="
+        ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+    } else {
+        # i still need to seperate the ffmpeg command when using nvenc, since i cant pass "-pass 2" at all
+        Write-Host "=== === Start final pass === ==="
+        ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+    }
 }
 
-$MiBresultsize = (Get-Item -LiteralPath $finaloutputpath).Length/1MB
+$MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile).Length/1MB
 if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
     if ($RetryEncodingIfTargetNotMet){
         Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
         $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
-        Remove-Item -LiteralPath $finaloutputpath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
         
         $EndTime = Get-Date
         $ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeAttemptStartTime).TotalSeconds, 2))
