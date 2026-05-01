@@ -36,7 +36,7 @@ param(
 
     $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
     [Alias("svtav1app")]
-    $isSvtav1encappAvailable = $true, # disable to manually force the use of svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and use it instead of ffmpeg's svt-av1 version.
+    $isSvtav1encappAvailable = $false, # disable to manually force the use of svt-av1. If its left true by default, the script will auto-detect if svtav1encapp is available, and use it instead of ffmpeg's svt-av1 version.
     [Alias("nvenctune")]
     $NvencTuneLevel = "hq", # you may optionally change the -tune paramterer when using nvenc encoders. This was mainly added to test the uhq tuning level only available for hevc_nvenc for certain gpus.
     [Alias("retry")]
@@ -147,9 +147,9 @@ if ($inputTargetVideoHeight -ne -1 -and $inputTargetVideoWidth -eq -1){
 }
 
 # Cerain codecs may need extra arguments to work properly or to use extra features. They are set here:
-#if ($videocodec -in "libx265", "libx254"){$FFmpegExtraVideoArgs = @()} else # I dont really need this
-
-if ($videocodec -in "hevc_nvenc", "h264_nvenc"){
+if ($videocodec -in "libx265", "libx264"){ # nvm i need this
+    $FFmpegExtraVideoArgs = @()
+} elseif ($videocodec -in "hevc_nvenc", "h264_nvenc"){
     if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
         Write-Host "Preset `"$videocodecpreset`" does not match for a nvenc preset, defaulting to preset `"p7`" for nvenc (this is the highest preset)"
         $videocodecpreset = "p7"
@@ -291,11 +291,11 @@ if ($fancyrename){ # I just realized im converting all files to MP4, regardless 
 
 if (!$outputfolder){
     $videoFullPath = Resolve-Path -LiteralPath $video
-    $FinalOutputFile = "$(Split-Path -LiteralPath $videoFullPath)\$outputfilename"
-    $svtav1appOutputTempPath = "$(Split-Path -LiteralPath $videoFullPath)\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $FinalOutputFile = Join-Path $(Split-Path -LiteralPath $videoFullPath) $outputfilename
+    $svtav1appOutputTempPath = Join-Path $(Split-Path -LiteralPath $videoFullPath) "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } elseif (Test-Path -LiteralPath $outputfolder) {
-    $FinalOutputFile = "$outputfolder\$outputfilename"
-    $svtav1appOutputTempPath = "$outputfolder\SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $FinalOutputFile = Join-Path $outputfolder $outputfilename
+    $svtav1appOutputTempPath = Join-Path $outputfolder "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
 } else {
     Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
     exit
@@ -352,8 +352,8 @@ if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)){
 }
 
 } # --- End of encoding retry loop ---
-Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # deletes x265 log files
-Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue # deletes other 2pass ffmpeg log files
+Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # delete 2pass log files
+Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue
 Remove-Item ".\SvtAv1EncApp_2pass.log*" -Force -ErrorAction SilentlyContinue
 
 
