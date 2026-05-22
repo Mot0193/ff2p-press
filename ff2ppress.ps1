@@ -1,6 +1,6 @@
 param(
     [Alias("i")]
-    $video, # the path of the video you want to compress
+    $InputVideo, # the path of the video you want to compress
     [Alias("s")]
     $TargetVideoSize_MiB, # set a target size in MiB
 
@@ -9,9 +9,9 @@ param(
     $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
 
     [Alias("cv")]
-    $videocodec = "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1
+    $VideoEncoder= "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1
     [Alias("cvpreset")]
-    $videocodecpreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8
+    $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8
     [Alias("nvenctune")]
     $NvencTuneLevel = "hq", # you may optionally change the -tune parameter when using nvenc encoders. This was mainly added to test the uhq tuning level, which is only available for hevc_nvenc and for certain gpus.
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon separated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
@@ -46,7 +46,7 @@ param(
 )
 Set-Location $PSScriptRoot
 
-$StartingVideoSize_MiB = (Get-Item -LiteralPath $video).Length/1MB
+$StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length/1MB
 if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)){
     Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
     exit
@@ -54,7 +54,7 @@ if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $Targe
 
 # Probe duration and calculate the duration of the video
 # ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1
-$StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $video
+$StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo
 if (-not ($TargetVideoTrim -eq -1)){
     $TargetVideoTrimStart, $TargetVideoTrimEnd = $TargetVideoTrim.Split("-")
     [int]$TargetVideoTrimStart_hrs, [int]$TargetVideoTrimStart_min, [int]$TargetVideoTrimStart_sec = $TargetVideoTrimStart.Split(":")
@@ -65,11 +65,11 @@ if (-not ($TargetVideoTrim -eq -1)){
 }
 
 # Probe video and audio bitrates
-[float]$StartingVideoBitrate_bps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $video
-$StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $video) / 1000
+[float]$StartingVideoBitrate_bps = ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo
+$StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
 if (-not $StartingAudioBitrate_kbps){
     Write-Warning "Failed to (easily) get the audio bitrate of the video. Letting ffmpeg interpret audio bitrate (may not be accurate)" # usually happens with mkv files, since apparently it just doesnt store the audio bitrate for some reason. MP4 my beloved
-    [int]$StartingAudioSize_KiB = (ffmpeg -i $video -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+    [int]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:0 -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
     $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
 }
 $TargetAudioCodec = $SelectedAudioCodec
@@ -133,8 +133,8 @@ Write-Host ("Target Audio Bitrate                     : {0:F2} kbps" -f $TargetA
 Write-Host "=== [FF2PPRESS Video Info] ==="
 
 # video resolution calculation (mostly only needed for svtav1encapp, but this needs to be here so we can print the resolution for the user)
-$StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 $video
-$StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 $video
+$StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 $InputVideo
+$StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 $InputVideo
 $TargetVideoHeight = $inputTargetVideoHeight
 $TargetVideoWidth  = $inputTargetVideoWidth
 if ($TargetVideoHeight -eq -1){$TargetVideoHeight = $StartingVideoHeight}
@@ -147,19 +147,19 @@ if ($inputTargetVideoHeight -ne -1 -and $inputTargetVideoWidth -eq -1){
 }
 
 # Check for the codec and a correct preset. Cerain codecs may also need extra arguments to work properly or to use extra features, those are set here too.
-if ($videocodec -in "libx265", "libx264"){
-    if (-not ($videocodecpreset -in "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo")){
-        Write-Host "Preset `"$videocodecpreset`" is not a valid preset for $videocodec, defaulting to preset `"medium`""
-        $videocodecpreset = "medium"
+if ($VideoEncoder-in "libx265", "libx264"){
+    if (-not ($VideoEncoderPreset -in "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo")){
+        Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"medium`""
+        $VideoEncoderPreset = "medium"
     }
     $FFmpegExtraVideoArgs = @()
-} elseif ($videocodec -in "hevc_nvenc", "h264_nvenc"){
-    if (-not ($videocodecpreset -in "p1","p2","p3","p4","p5","p6","p7")){
-        Write-Host "Preset `"$videocodecpreset`" is not a valid preset for $videocodec, defaulting to preset `"p7`""
-        $videocodecpreset = "p7"
+} elseif ($VideoEncoder-in "hevc_nvenc", "h264_nvenc"){
+    if (-not ($VideoEncoderPreset -in "p1","p2","p3","p4","p5","p6","p7")){
+        Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"p7`""
+        $VideoEncoderPreset = "p7"
     }
     if ($NvencTuneLevel -eq "uhq"){
-        if ($videocodec -eq "h264_nvenc") {
+        if ($VideoEncoder-eq "h264_nvenc") {
             Write-Warning "UHQ (ultra high quality) tuning for h264_nvenc is unavailable. Using HQ tuning instead."
             $NvencTuneLevel = "hq"
         } else {
@@ -171,21 +171,21 @@ if ($videocodec -in "libx265", "libx264"){
         "-tune", "$NvencTuneLevel",
         "-multipass", "fullres"
     )
-} elseif ($videocodec -eq "libaom-av1"){
+} elseif ($VideoEncoder-eq "libaom-av1"){
     Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the pass will still complete. Have patiance"
-    if ($videocodecpreset -notin (0..8)){
-        Write-Host "Preset `"$videocodecpreset`" is not a valid preset for $videocodec, defaulting to preset `"8`""
-        $videocodecpreset = "8"
+    if ($VideoEncoderPreset -notin (0..8)){
+        Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"8`""
+        $VideoEncoderPreset = "8"
     }
 
     $FFmpegExtraVideoArgs = @(
-        "-cpu-used", "$videocodecpreset",
+        "-cpu-used", "$VideoEncoderPreset",
         "-row-mt", "1"
     )
-} elseif ($videocodec -eq "libsvtav1"){
-    if ($videocodecpreset -notin (-1..13)){
-        Write-Host "Preset `"$videocodecpreset`" is not a valid preset for $videocodec, defaulting to preset `"5`""
-        $videocodecpreset = "5"
+} elseif ($VideoEncoder-eq "libsvtav1"){
+    if ($VideoEncoderPreset -notin (-1..13)){
+        Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"5`""
+        $VideoEncoderPreset = "5"
     }
 
     if ($isSvtav1encappAvailable -eq $true){
@@ -196,8 +196,8 @@ if ($videocodec -in "libx265", "libx264"){
         Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. If you use a version below 8.1, the video will just encode twice with 1 pass, wasting your time. Make sure youre on the latest FFmpeg version or use SvtAv1EncApp as the readme mentions."
     } else {
         Write-Warning "SvtAv1EncApp was found! Consider updating FFmpeg to version 8.1 or higher so you can use 2-pass encoding via FFmpeg instead if you haven't already. FFmpeg's svt-av1 version in 2-pass mode may be faster than using SvtAv1EncApp via this script."
-        $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $video
-        $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $video
+        $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $InputVideo
+        $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo
         $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
         
         if ($StartingVideoPixFmt -eq "yuv420p10le"){
@@ -210,7 +210,7 @@ if ($videocodec -in "libx265", "libx264"){
             "-h", $TargetVideoHeight,
             "--rc", "1",
             "--tbr", $TargetVideoBitrate_kbps,
-            "--preset", $videocodecpreset,
+            "--preset", $VideoEncoderPreset,
             "--input-depth", $TargetVideoBitDepth,
             "--fps-num", $StartingVideoFrameNumerator,
             "--fps-denom", $StartingVideoFrameDenominator,
@@ -233,10 +233,10 @@ if ($videocodec -in "libx265", "libx264"){
 
 # FFmpeg "Base" Video arguments. Common arguments which can/should be set for any codec
 $FFmpegBaseVideoArgs = @(
-    "-i", $video,
-    "-c:v", $videocodec,
+    "-i", $InputVideo,
+    "-c:v", $VideoEncoder,
     "-b:v", "$TargetVideoBitrate_kbps`k",
-    "-preset", "$videocodecpreset"
+    "-preset", "$VideoEncoderPreset"
 )
 
 $FFmpegNullP1 = @(
@@ -273,10 +273,10 @@ if (-not ($TargetVideoTrim -eq -1)){
 }
 
 if (($encoderParameters)){
-    if($videocodec -eq "libaom-av1"){
+    if($VideoEncoder-eq "libaom-av1"){
         $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
     } else {
-        $codecparam = $videocodec.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
+        $codecparam = $VideoEncoder.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
     }
 
     $FFmpegCodecParams = @(
@@ -287,19 +287,19 @@ if (($encoderParameters)){
 }
 
 if ($fancyrename){ # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
-    if ($TargetVideoSize_MiB){ $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
-    else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video))_$($videocodec)_$($videocodecpreset).mp4" }
+    if ($TargetVideoSize_MiB){ $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
+    else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
 } else {
-    $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
 }
 
 if (!$outputfolder){
-    $videoFullPath = Resolve-Path -LiteralPath $video
-    $FinalOutputFile = Join-Path $(Split-Path -LiteralPath $videoFullPath) $outputfilename
-    $svtav1appOutputTempPath = Join-Path $(Split-Path -LiteralPath $videoFullPath) "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $InputVideoFullPath = Resolve-Path -LiteralPath $InputVideo
+    $FinalOutputFile = Join-Path $(Split-Path -LiteralPath $InputVideoFullPath) $outputfilename
+    $svtav1appOutputTempPath = Join-Path $(Split-Path -LiteralPath $InputVideoFullPath) "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
 } elseif (Test-Path -LiteralPath $outputfolder) {
     $FinalOutputFile = Join-Path $outputfolder $outputfilename
-    $svtav1appOutputTempPath = Join-Path $outputfolder "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($video)).mp4"
+    $svtav1appOutputTempPath = Join-Path $outputfolder "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
 } else {
     Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
     exit
@@ -310,19 +310,19 @@ Write-Host "Output file path: $FinalOutputFile"
 $EncodeAttemptStartTime = Get-Date
 $EncodingAttempts++
 
-if (($videocodec -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
+if (($VideoEncoder-eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
     Write-Host "=== === Start 1st pass === ==="
-    ffmpeg -hide_banner -loglevel error -i $video -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+    ffmpeg -hide_banner -loglevel error -i $InputVideo -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
 
     Write-Host "=== === Start final pass === ==="
-    ffmpeg -hide_banner -loglevel error -i $video -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
+    ffmpeg -hide_banner -loglevel error -i $InputVideo -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
 
     Write-Host "=== Encoding Audio ==="
-    ffmpeg -hide_banner -loglevel error -y -i $svtav1appOutputTempPath -i $video -map 0:v? -map 1:a? @FFmpegTrimArgs -c:v copy @FFmpegAudioArgs $FinalOutputFile # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
+    ffmpeg -hide_banner -loglevel error -y -i $svtav1appOutputTempPath -i $InputVideo -map 0:v? -map 1:a? @FFmpegTrimArgs -c:v copy @FFmpegAudioArgs $FinalOutputFile # seperately encode the audio by mapping the audio from the original video and the video from the newly compressed file
 
     Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
 } else {
-    if (-not($videocodec -in "hevc_nvenc", "h264_nvenc")){
+    if (-not($VideoEncoder-in "hevc_nvenc", "h264_nvenc")){
         Write-Host "=== === Start 1st pass === ==="
         ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null @FFmpegNullP1
 
