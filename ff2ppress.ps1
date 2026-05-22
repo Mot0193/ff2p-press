@@ -9,9 +9,9 @@ param(
     $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
 
     [Alias("cv")]
-    $VideoEncoder= "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1
+    $VideoEncoder= "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1, libvpx-vp9
     [Alias("cvpreset")]
-    $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8
+    $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8, libvpx-vp9 - 4
     [Alias("nvenctune")]
     $NvencTuneLevel = "hq", # you may optionally change the -tune parameter when using nvenc encoders. This was mainly added to test the uhq tuning level, which is only available for hevc_nvenc and for certain gpus.
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon separated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
@@ -172,7 +172,7 @@ if ($VideoEncoder-in "libx265", "libx264"){
         "-multipass", "fullres"
     )
 } elseif ($VideoEncoder-eq "libaom-av1"){
-    Write-Host "libaom-av1 Info! On the 1st pass the progress bar/info may appear to be stuck, but the pass will still complete. Have patiance"
+    Write-Host "When using $VideoEncoder the progress bar/info may appear to be stuck on the 1st pass, but the pass will still complete."
     if ($VideoEncoderPreset -notin (0..8)){
         Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"8`""
         $VideoEncoderPreset = "8"
@@ -214,8 +214,7 @@ if ($VideoEncoder-in "libx265", "libx264"){
             "--input-depth", $TargetVideoBitDepth,
             "--fps-num", $StartingVideoFrameNumerator,
             "--fps-denom", $StartingVideoFrameDenominator,
-            "--stats", "SvtAv1EncApp_2pass.log",
-            "--lookahead", "42" # Force lookahead to 42, as the svtav1 warning tells you to. No clue if this automatically gets set, or what the benifit is, but im setting it anyways. "Svt[warn]: For CRF or 2PASS RC mode, the maximum needed Lookahead distance is 42. Force the look_ahead_distance to be 42"
+            "--stats", "SvtAv1EncApp_2pass.log"
         )
 
         if ($encoderParameters){
@@ -226,6 +225,39 @@ if ($VideoEncoder-in "libx265", "libx264"){
             }
         }
     }
+} elseif ($VideoEncoder-eq "libvpx-vp9"){
+    Write-Host "When using $VideoEncoder the progress bar/info may appear to be stuck on the 1st pass, but the pass will still complete."
+    if ($VideoEncoderPreset -notin (-8..8)){
+        Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"4`""
+        $VideoEncoderPreset = "4"
+    }
+    if ($VideoEncoderPreset -in (5..8)){
+        Write-Warning "Using a preset (`"cpu-used`") of 5 and above for $VideoEncoder makes the 1st pass significantly slower. Preset 4 is the fastest in most, if not all cases!"
+    }
+
+    $FFmpegExtraVideoArgs = @(
+        "-cpu-used", "$VideoEncoderPreset",
+        "-row-mt", "1"
+    )
+    
+    <# Just testing some default options, took these from https://av1.wiki/docs/encoders/vpxenc#vp9
+    $FFmpegExtraVideoArgs = @(
+        "-pix_fmt", "yuv420p10le",
+        "-quality", "good",
+        "-profile:v", "2",
+        "-lag-in-frames", "25",
+        "-cpu-used", "$VideoEncoderPreset",
+        "-auto-alt-ref", "6",
+        "-arnr-maxframes", "7",
+        "-arnr-strength", "4",
+        "-aq-mode", "0",
+        "-tune-content", "default",
+        "-row-mt", "1",
+        "-tile-columns", "1",
+        "-tile-rows", "0",
+        "-enable-tpl", "1"
+    )
+    #>
 } else {
     Write-Error "Unkown/Unavailable video codec. Check the available codecs in readme"
     exit
@@ -276,7 +308,7 @@ if (($encoderParameters)){
     if($VideoEncoder-eq "libaom-av1"){
         $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
     } else {
-        $codecparam = $VideoEncoder.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it
+        $codecparam = $VideoEncoder.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it. Same for libvpx-vp9 (?)
     }
 
     $FFmpegCodecParams = @(
@@ -324,9 +356,11 @@ if (($VideoEncoder-eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)){
 } else {
     if (-not($VideoEncoder-in "hevc_nvenc", "h264_nvenc")){
         Write-Host "=== === Start 1st pass === ==="
+        #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null $FFmpegNullP1"
         ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null @FFmpegNullP1
 
         Write-Host "=== === Start final pass === ==="
+        #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
         ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
     } else {
         # i still need to seperate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
