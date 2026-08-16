@@ -2,7 +2,7 @@ param(
     [Alias("i")]
     $InputVideo, # the path of the video you want to compress
     [Alias("s")]
-    $TargetVideoSize_MiB, # set a target size in MiB
+    $TargetVideoSize_MiB = 20, # set a target size in MiB
 
     [Alias("o")]
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
@@ -13,7 +13,7 @@ param(
     [Alias("cvpreset")]
     $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8, libvpx-vp9 - 4
     [Alias("nvenctune")]
-    $NvencTuneLevel = "hq", # you may optionally change the -tune parameter when using nvenc encoders. This was mainly added to test the uhq tuning level, which is only available for hevc_nvenc and for certain gpus.
+    $NvencTuneLevel = "hq", # you may optionally change the -tune parameter when using nvenc encoders. This was mainly added to test the uhq tuning level, which is only available for hevc_nvenc for certain gpus.
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon separated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
     $encoderParameters,
 
@@ -34,7 +34,7 @@ param(
     $SelectedAudioCodec = "libopus", # other available codecs: aac
     [Alias("bra")]
     $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
-    $ForceAudioTranscoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
+    $ForceAudioEncoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
     $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accomodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
 
     [Alias("svtav1app")]
@@ -78,7 +78,7 @@ $TargetAudioCodec = $SelectedAudioCodec
 
 
 if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps) {
-    if (-not $ForceAudioTranscoding) {
+    if (-not $ForceAudioEncoding) {
         Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
         $TargetAudioCodec = "copy"
     }
@@ -274,10 +274,6 @@ while (1) {
             "-preset", "$VideoEncoderPreset"
         )
 
-        $FFmpegNullP1 = @(
-            "NUL"    
-        )
-
         if ($TargetAudioCodec -in "libopus", "aac", "copy") {
             $FFmpegAudioArgs = @(
                 "-c:a", $TargetAudioCodec,
@@ -375,8 +371,8 @@ while (1) {
         else {
             if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
                 Write-Host "Start 1st pass..."
-                #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null $FFmpegNullP1"
-                ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null @FFmpegNullP1
+                #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
+                ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
 
                 Write-Host "Start final pass..."
                 #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
@@ -388,11 +384,7 @@ while (1) {
                 ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
             }
         }
-    }
-
-        
-
-        
+    }     
 
     $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile).Length / 1MB
     if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)) {
