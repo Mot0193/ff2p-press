@@ -17,7 +17,7 @@ You can see all the parameters you can set at the top of the ps1 script. All of 
 |`-s <desired_file_size_in_MiB>`| Target size of the file in mebibytes. The default is 20 MiB, enough for the Discord file size limit|
 |`-o <folder_path>`| Output folder for the compressed video. Not setting this will output the video in the same folder as the input video|
 |`-cv <encoder>` | The encoder used for compressing the video (e.g. `libx264`). Available encoders are listed in the [Supported Encoders](https://github.com/Mot0193/ff2p-press#supported-encoders) section of this readme.|
-|`-cvpreset <preset_for_selected_encoder>| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Supported Encoders](https://github.com/Mot0193/ff2p-press#supported-encoders) for the preset names for each encoder. |
+|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Supported Encoders](https://github.com/Mot0193/ff2p-press#supported-encoders) for the preset names for each encoder. |
 |`-h <desired_resolution>`<br> or <br>`-w <desired_resolution>`| Rescale resolution. You may only use -h (height) to automatically scale the width to match the aspect ratio or vice versa (e.g. using `-h 1080` on a 2560x1440 video will result into a 1920x1080 video). Scaling down a video can make encoding faster.|
 
 ## Examples of parameter usage
