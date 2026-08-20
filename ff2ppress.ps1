@@ -2,7 +2,7 @@ param(
     [Alias("i")]
     $InputVideo, # the path of the video you want to compress
     [Alias("s")]
-    $TargetVideoSize_MiB = 20, # set a target size in MiB
+    [float]$TargetVideoSize_MiB = 20, # set a target size in MiB
 
     [Alias("o")]
     $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
@@ -22,10 +22,10 @@ param(
     [Alias("w")]
     $inputTargetVideoWidth = -1,
     [Alias("trim")]
-    $TargetVideoTrim = -1, # optionally trim the video. This uses ffmpeg's -ss and -to. Timestamps use the format "HH:MM:SS", separate starting time and end time with "-". Target bitrate will be correctly calculated based on the duration of the trim. Example usage: "-trim 0:0:0-0:5:0" (trim video from the start to the 5th minute); "-trim 0:2:20-0:4:10" (trim video from 2mins 20sec to 4min 10sec). 
+    $TargetVideoTrim, # Set the start and end timestamps to trim the video, seperated by "-". The timestamps can have the following formats: Seconds (example: "-trim 5-10"); MM:SS ("-trim 0:15-1:30"); HH:MM:SS ("-trim 1:10:05-2:40:30"); HH:MM:SS.mmm ("-trim 1:10:05.250-2:40:30.750"). You can also pass "end" as the end timestamp, to set it to the end of the video like so: "-trim 5-end", "-trim 0:15-end"
     $ForceVideoEncoding = 1, # when using -trim, there could be a chance that the target video bitrate will end up being higher than the starting video target. This means trimming the video will theoretically be enough to get under the target file size without having to re-encode the video. Setting "-ForceVideoEncoding" to "1" will make ffmpeg re-encode the video in this case, even if the target video bitrate is higher than the input. Setting "-ForceVideoEncoding" to "0" will copy the video and audio codec while still trimming the video, but it may result into a choppy video or the start of the video may be black for a few seconds.
-    [Alias("brv")] 
-    $TargetVideoBitrate_kbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
+    [Alias("brv")]
+    [float]$TargetVideoBitrate_kbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
     [Alias("brlow")]
     $BitratePercentageLow = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead. 
     # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
@@ -38,7 +38,7 @@ param(
     [Alias("ca")]
     $SelectedAudioCodec = "libopus", # other available codecs: aac
     [Alias("bra")]
-    $TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
+    [float]$TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
     $ForceAudioEncoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
     $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accommodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
 
@@ -53,6 +53,10 @@ param(
 Set-Location $PSScriptRoot
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length / 1MB
+if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)) {
+    Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
+    exit
+}
 if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)) {
     Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
     exit
@@ -90,11 +94,38 @@ while (($StartingVideoDuration_sec -eq "N/A") -or -not($StartingVideoDuration_se
     $GetVideoDurationAttempts++
 }
 
-if (-not ($TargetVideoTrim -eq -1)) {
+if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
+    function ConvertTo-Seconds {
+        # probably a cursed place to put a function definition
+        # whatever, go my clod! im lazy
+        param([Parameter(Mandatory)][string]$Timestamp)
+
+        if ($Timestamp -eq "end"){ # as a qol 
+            return $StartingVideoDuration_sec
+        }
+
+        $TimestampParts = $Timestamp.Split(":")
+        
+        # you can tell the type of timestamp format that was used from the number of parts it has
+        switch ($TimestampParts.Count) {
+            1 { # e.g "90"
+                return [double]$TimestampParts[0]
+            }
+            2 { # e.g "1:30" 
+                return ([double]$TimestampParts[0] * 60) + [double]$TimestampParts[1]
+            }
+            3 { # e.g "0:01:30" or "0:01:30.500". The decimal point number should be miliseconds not fractions.
+                return ([double]$TimestampParts[0] * 3600) + ([double]$TimestampParts[1] * 60) + [double]$TimestampParts[2]
+            }
+            default {
+                throw "Invalid timestamp format: $Timestamp"
+            }
+        }
+    }
+
     $TargetVideoTrimStart, $TargetVideoTrimEnd = $TargetVideoTrim.Split("-")
-    [int]$TargetVideoTrimStart_hrs, [int]$TargetVideoTrimStart_min, [int]$TargetVideoTrimStart_sec = $TargetVideoTrimStart.Split(":")
-    [int]$TargetVideoTrimEnd_hrs, [int]$TargetVideoTrimEnd_min, [int]$TargetVideoTrimEnd_sec = $TargetVideoTrimEnd.Split(":")
-    $TargetVideoDuration_sec = (($TargetVideoTrimEnd_hrs * 3600) + ($TargetVideoTrimEnd_min * 60) + $TargetVideoTrimEnd_sec) - (($TargetVideoTrimStart_hrs * 3600) + ($TargetVideoTrimStart_min * 60) + $TargetVideoTrimStart_sec)
+
+    $TargetVideoDuration_sec = (ConvertTo-Seconds $TargetVideoTrimEnd) - (ConvertTo-Seconds $TargetVideoTrimStart)
 }
 else {
     $TargetVideoDuration_sec = $StartingVideoDuration_sec
@@ -131,7 +162,7 @@ while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbp
 }
 
 $TargetAudioCodec = $SelectedAudioCodec
-if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps) {
+if (($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps) {
     if (-not $ForceAudioEncoding) {
         Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
         $TargetAudioCodec = "copy"
@@ -142,36 +173,38 @@ if (($StartingAudioBitrate_kbps -le [float]$TargetAudioBitrate_kbps) -and $Start
     $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
 }
 
-if ($TargetVideoSize_MiB -and -not($TargetVideoBitrate_kbps -gt 0)) {
-    [float]$TargetVideoSize_kbit = [float]$TargetVideoSize_MiB * 8388.608
-    [float]$TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec # the approximate size of the whole audio
-    [float]$TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # the bitrate for the video would be the targeted size - approximate audio size, all divided by the duration 
+if (-not($TargetVideoBitrate_kbps)){
+    if (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow')){
+        Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($StartingVideoBitrate_kbps kbps) instead"
+        $TargetVideoBitrate_kbps = $StartingVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
+    }
+    else {
+        [float]$TargetVideoSize_kbit = $TargetVideoSize_MiB * 8388.608
+        [float]$TargetAudioSize_kbit = $TargetAudioBitrate_kbps * $TargetVideoDuration_sec # the approximate size of the whole audio
+        $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # the bitrate for the video would be the targeted size - approximate audio size, all divided by the duration 
 
-    if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 0.2) {
-        if (-not $PrioritizeAudioBitrate) {
-            Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
-            # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-            $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once again
-            $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
-            $TargetAudioSize_kbit = [float]$TargetAudioBitrate_kbps * $TargetVideoDuration_sec
-        }
-        else {
-            Write-Warning "Audio WILL be over 20% of the target size because you enabled PrioritizeAudioBitrate."
-            if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 1) {
-                Write-Error "Audio would take up more than the entire video target. Either disable PrioritizeAudioBitrate or lower the audio bitrate!"
-                exit
+        if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 0.2) {
+            if (-not $PrioritizeAudioBitrate) {
+                Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
+                # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
+                $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once again
+                $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
+                $TargetAudioSize_kbit = $TargetAudioBitrate_kbps * $TargetVideoDuration_sec
             }
+            else {
+                Write-Warning "Audio WILL be over 20% of the target size because you enabled PrioritizeAudioBitrate."
+                if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 1) {
+                    Write-Error "Audio would take up more than the entire video target. Either disable PrioritizeAudioBitrate or lower the audio bitrate!"
+                    exit
+                }
+            }
+            $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # recalculate the video bitrate to accommodate the new audio bitrate
         }
-        $TargetVideoBitrate_kbps = ($TargetVideoSize_kbit - $TargetAudioSize_kbit) / $TargetVideoDuration_sec # recalculate the video bitrate to accommodate the new audio bitrate
-    }
 
-    if ($BitratePercentageLow -gt 0) {
-        $TargetVideoBitrate_kbps = $TargetVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
+        if ($BitratePercentageLow -gt 0) {
+            $TargetVideoBitrate_kbps = $TargetVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
+        }
     }
-}
-elseif ($BitratePercentageLow -gt 0) { # woops this is broken since i added a default value to the target size.. i need a better way to manage default values without overwriting script parameters variables
-    Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($StartingVideoBitrate_kbps kbps) instead"
-    $TargetVideoBitrate_kbps = $StartingVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
 }
 
 if ($TargetVideoBitrate_kbps -le 0) {
@@ -185,19 +218,23 @@ $EncodeTotalStartTime = Get-Date
 while (1) {
     # --- Start of encoding retry loop ---
     Write-Host "[FF2PPRESS Video Info]"
-    Write-Host ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$StartingVideoDuration_sec, $StartingVideoSize_MiB, $StartingVideoBitrate_kbps)
+    Write-Host ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f $StartingVideoDuration_sec, $StartingVideoSize_MiB, $StartingVideoBitrate_kbps)
     Write-Host ("Starting Audio Bitrate                   : {0:F2} kbps" -f $StartingAudioBitrate_kbps)
-    Write-Host ("Target Video Duration / Size / Bitrate   : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f [float]$TargetVideoDuration_sec, $TargetVideoSize_MiB, $TargetVideoBitrate_kbps)
+    Write-Host ("Target Video Duration / Size / Bitrate   : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f $TargetVideoDuration_sec, $TargetVideoSize_MiB, $TargetVideoBitrate_kbps)
     Write-Host ("Target Audio Bitrate                     : {0:F2} kbps" -f $TargetAudioBitrate_kbps)
     Write-Host "[FF2PPRESS Video Info]"
 
-    if ($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps -and $EncodingAttempts -le 1 -and $ForceVideoEncoding -eq 0) {
-        Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, so in this case the video will just be trimmed without re-encoding (will just copy the video codec")
+    if (($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps) -and ($EncodingAttempts -lt 1) -and ($ForceVideoEncoding -eq 0)) { 
+        $JustTrimmingEnabled = $true 
+    } else { $JustTrimmingEnabled = $false }
+
+    if ($JustTrimmingEnabled) {
+        Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, so in this case the video will just be trimmed without re-encoding")
         Write-Warning("For certain videos this approach may result in a `"choppy`" video. As an alternative you may choose to forcefully re-encode the video, even if the video bitrate is higher, by using -ForceVideoEncoding 1")
-        $fancyrename = 0 # disable this so files dont have unnecessary codec information in their names
+        $fancyrename = $false # disable this so files dont have unnecessary codec information in their names
     }
     else { # when just trimming, skip unnecessary setting some options
-        if ($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps -and $EncodingAttempts -le 1) {
+        if ($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps -and $EncodingAttempts -lt 1) {
             Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, but in this case the video will be encoded with the higher bitrate. If you'd like, you can try using -ForceVideoEncoding 0 to only trim the video without re-encoding, but this may result in a choppy video.")
         }
         # video resolution calculation (mostly only needed for svtav1encapp, but this needs to be here so we can print the resolution for the user)
@@ -218,14 +255,18 @@ while (1) {
         # Check for the codec and a correct preset. Certain codecs may also need extra arguments to work properly or to use extra features, those are set here too.
         if ($VideoEncoder -in "libx265", "libx264") {
             if (-not ($VideoEncoderPreset -in "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo")) {
-                Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"medium`""
+                if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')){
+                    Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"medium`""
+                }
                 $VideoEncoderPreset = "medium"
             }
             $FFmpegExtraVideoArgs = @()
         }
         elseif ($VideoEncoder -in "hevc_nvenc", "h264_nvenc") {
             if (-not ($VideoEncoderPreset -in "p1", "p2", "p3", "p4", "p5", "p6", "p7")) {
-                Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"p7`""
+                if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')){
+                    Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"p7`""
+                }
                 $VideoEncoderPreset = "p7"
             }
             if ($NvencTuneLevel -eq "uhq") {
@@ -246,7 +287,9 @@ while (1) {
         elseif ($VideoEncoder -eq "libaom-av1") {
             Write-Host "When using $VideoEncoder the progress bar/info may appear to be stuck on the 1st pass, but the pass will still complete."
             if ($VideoEncoderPreset -notin (0..8)) {
-                Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"8`""
+                if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')){
+                    Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"8`""
+                }
                 $VideoEncoderPreset = "8"
             }
 
@@ -257,7 +300,9 @@ while (1) {
         }
         elseif ($VideoEncoder -eq "libsvtav1") {
             if ($VideoEncoderPreset -notin (-1..13)) {
-                Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"5`""
+                if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')){
+                    Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"5`""
+                }
                 $VideoEncoderPreset = "5"
             }
 
@@ -304,7 +349,9 @@ while (1) {
         elseif ($VideoEncoder -eq "libvpx-vp9") {
             Write-Host "When using $VideoEncoder the progress bar/info may appear to be stuck on the 1st pass, but the pass will still complete."
             if ($VideoEncoderPreset -notin (-8..8)) {
-                Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"4`""
+                if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')){
+                    Write-Host "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"4`""
+                }
                 $VideoEncoderPreset = "4"
             }
             if ($VideoEncoderPreset -in (5..8)) {
@@ -366,10 +413,17 @@ while (1) {
     }
 
     if (-not ($TargetVideoTrim -eq -1)) {
-        $FFmpegTrimArgs = @(
-            "-ss", $TargetVideoTrimStart,
-            "-to", $TargetVideoTrimEnd
-        )
+        if ($TargetVideoTrimEnd -eq "end"){
+            $FFmpegTrimArgs = @(
+                "-ss", $TargetVideoTrimStart
+            )
+        }
+        else {
+            $FFmpegTrimArgs = @(
+                "-ss", $TargetVideoTrimStart,
+                "-to", $TargetVideoTrimEnd
+            )
+        }
     }
     else {
         $FFmpegTrimArgs = @()
@@ -417,9 +471,8 @@ while (1) {
 
     # --- Start Encoding ---
     $EncodeAttemptStartTime = Get-Date
-    $EncodingAttempts++
 
-    if ($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps -and $EncodingAttempts -le 1 -and $ForceVideoEncoding -eq 0) {
+    if ($JustTrimmingEnabled) {
         Write-Host "Just trimming the video..."
         ffmpeg -hide_banner -loglevel error -i $InputVideo @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegTrimArgs -c:v copy -c:a copy $FinalOutputFile
     }
@@ -450,18 +503,29 @@ while (1) {
             else {
                 # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
                 Write-Host "Start final pass..."
-                #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
+                Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
                 ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
             }
         }
     }     
 
+    $EncodingAttempts++
+
     $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile).Length / 1MB
     if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)) {
         if ($RetryEncodingIfTargetNotMet) {
-            Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
+            if ($JustTrimmingEnabled){
+                Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size"
+                Write-Warning("Just trimming the video failed to get it down to size. Falling back to re-encoding.")
+                
+                $fancyrename = ($PSBoundParameters['fancyrename'] -eq $false) ? $PSBoundParameters['fancyrename'] : $true
+            } 
+            else {
+                Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
+                $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
+            }
             Write-Warning "You can disable automaic retry with -retry 0"
-            $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
+
             Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
         
             $EndTime = Get-Date
