@@ -53,12 +53,10 @@ param(
 Set-Location $PSScriptRoot
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length / 1MB
-if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)) {
-    Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
-    exit
-}
-if (-not($StartingVideoSize_MiB -eq "0") -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB)) {
-    Write-Error "Target size cant be higher than the video's current size ($StartingVideoSize_MiB)"
+if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $TargetVideoBitrate_kbps -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
+    # quite the handful... if statements like these trip me up a lot
+    # check if the input video size is under the target size, but only exit if the target bitrate wasnt manually set, and if brlow was used without setting a target size
+    Write-Error "Target size can't be higher than the video's current size ($StartingVideoSize_MiB)"
     exit
 }
 
@@ -100,7 +98,7 @@ if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
         # whatever, go my clod! im lazy
         param([Parameter(Mandatory)][string]$Timestamp)
 
-        if ($Timestamp -eq "end"){ # as a qol 
+        if ($Timestamp -eq "end"){
             return $StartingVideoDuration_sec
         }
 
@@ -412,7 +410,7 @@ while (1) {
         $FFmpegMapAudioArgs = @()
     }
 
-    if (-not ($TargetVideoTrim -eq -1)) {
+    if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
         if ($TargetVideoTrimEnd -eq "end"){
             $FFmpegTrimArgs = @(
                 "-ss", $TargetVideoTrimStart
