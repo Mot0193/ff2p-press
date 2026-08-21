@@ -47,7 +47,10 @@ param(
     [Alias("retrylow")]
     $RetryEncodingPercentageLowAmount = 2 # the percentage of how much the script should lower the bitrate for each try when the video fails to hit the file target
 )
-Set-Location $PSScriptRoot
+$PassLogDir = Join-Path ([System.IO.Path]::GetTempPath()) "ff2ppress-$PID"
+New-Item -ItemType Directory -Force -Path $PassLogDir | Out-Null
+$PassLogPrefix = Join-Path $PassLogDir "pass"
+$FFmpegNull = if ($IsWindows) { "NUL" } else { "/dev/null" }
 
 $IsFfmpegAvailable = [bool] (Get-Command -ErrorAction Ignore -Type Application ffmpeg)
 if (-not $IsFfmpegAvailable){
@@ -148,7 +151,7 @@ if ($AudioStreamsExist){
                 $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:$InputAudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
             }
             default {
-                [float]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:$InputAudioStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+                [float]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:$InputAudioStream -c copy -f null $FFmpegNull 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
                 $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
             }
         }
@@ -170,7 +173,7 @@ if ($VideoStreamsExist){
                 $StartingVideoBitrate_kbps = (ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
             }
             default {
-                [float]$StartingVideoSize_KiB = (ffmpeg -i $InputVideo -map 0:v:$InputVideoStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
+                [float]$StartingVideoSize_KiB = (ffmpeg -i $InputVideo -map 0:v:$InputVideoStream -c copy -f null $FFmpegNull 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
                 $StartingVideoBitrate_kbps = ($StartingVideoSize_KiB * 8.192) / $StartingVideoDuration_sec
             }
         }
@@ -411,12 +414,6 @@ while (1) {
         }
     }
 
-    if ($IsWindows){
-        $FFmpegNull = "NUL"
-    } else {
-        $FFmpegNull = "/dev/null"
-    }
-
     if ($fancyrename) {
         # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
         if ($PSBoundParameters.ContainsKey('TargetVideoSize_MiB')) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
@@ -450,11 +447,11 @@ while (1) {
         if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
             Write-Host "Start 1st pass..."
             #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null $FFmpegNull"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null $FFmpegNull
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 -passlogfile $PassLogPrefix @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null $FFmpegNull
 
             Write-Host "Start final pass..."
             #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FFmpegDiscardAudio $FinalOutputFile
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 -passlogfile $PassLogPrefix @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FFmpegDiscardAudio $FinalOutputFile
         }
         else {
             # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
@@ -500,8 +497,7 @@ while (1) {
 
 } # --- End of encoding retry loop ---
 
-Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # delete 2pass log files
-Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
 
 
 $EndTime = Get-Date
