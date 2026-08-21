@@ -62,7 +62,7 @@ else {
 }
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length / 1MB
-if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $TargetVideoBitrate_kbps -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
+if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
     # quite the handful... if statements like these trip me up a lot
     # check if the input video size is under the target size, but only exit if the target bitrate wasnt manually set, and if brlow was used without setting a target size
     Write-Error "Target size can't be higher than the video's current size ($StartingVideoSize_MiB)"
@@ -74,7 +74,7 @@ $GetVideoDurationAttempts = 1
 while (($StartingVideoDuration_sec -eq "N/A") -or -not($StartingVideoDuration_sec)){
     switch ($GetVideoDurationAttempts) {
         1 {
-            $StartingVideoDuration_sec = ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo
+            [double]$StartingVideoDuration_sec = ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo
         }
         2 {
             # some videos dont store the duration on a per video stream basis, so its harder to get the duration of a specific stream
@@ -84,7 +84,7 @@ while (($StartingVideoDuration_sec -eq "N/A") -or -not($StartingVideoDuration_se
             $TagDuration = $TagDurationFull.Value -replace '(\.\d{7})\d*$', '$1' # [TimeSpan]::Parse can only parse 7 digits for the second fractions. This limits the second fractions to 7 digits. Example duration: 00:23:41.920000000
             try {
                 $TagDurationParsed = [TimeSpan]::Parse($TagDuration)
-                $StartingVideoDuration_sec = $TagDurationParsed.TotalSeconds
+                [double]$StartingVideoDuration_sec = $TagDurationParsed.TotalSeconds
             } catch {
                 $StartingVideoDuration_sec = $null
             }
@@ -95,7 +95,7 @@ while (($StartingVideoDuration_sec -eq "N/A") -or -not($StartingVideoDuration_se
                 Write-Warning "Could not get the exact duration of your specified video stream. The format duration will be used instead, which may or may not result in inaccurate bitrate calculations!"
             }
 
-            $StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo
+            [double]$StartingVideoDuration_sec = ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo
         }
     }
     $GetVideoDurationAttempts++
@@ -132,7 +132,7 @@ if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
 
     $TargetVideoTrimStart, $TargetVideoTrimEnd = $TargetVideoTrim.Split("-")
 
-    $TargetVideoDuration_sec = (ConvertTo-Seconds $TargetVideoTrimEnd) - (ConvertTo-Seconds $TargetVideoTrimStart)
+    [double]$TargetVideoDuration_sec = (ConvertTo-Seconds $TargetVideoTrimEnd) - (ConvertTo-Seconds $TargetVideoTrimStart)
 }
 else {
     $TargetVideoDuration_sec = $StartingVideoDuration_sec
@@ -182,7 +182,7 @@ if (($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) -and $StartingAudi
 
 if (-not($TargetVideoBitrate_kbps)){
     if (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow')){
-        Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate ($StartingVideoBitrate_kbps kbps) instead"
+        Write-Host "Target size was not given, using bitrate lowering percentage on the input video's bitrate instead"
         $TargetVideoBitrate_kbps = $StartingVideoBitrate_kbps * (1 - ($BitratePercentageLow / 100))
     }
     else {
@@ -354,7 +354,23 @@ while (1) {
         else {
             $FFmpegVideoRescaleArgs = @()
         }
-    }
+
+        if (($encoderParameters)) {
+            if ($VideoEncoder -eq "libaom-av1") {
+                $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
+            }
+            else {
+                $codecparam = $VideoEncoder.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it. Same for libvpx-vp9 (?)
+            }
+
+            $FFmpegCodecParams = @(
+                "-$codecparam-params", "$encoderParameters"
+            )
+        }
+        else {
+            $FFmpegCodecParams = @()
+        }
+    } # end of skip when just trimming
 
     if (($InputAudioStream -gt 0) -or ($InputVideoStream -gt 0)) {
         $FFmpegMapVideoArgs = @(
@@ -386,25 +402,9 @@ while (1) {
         $FFmpegTrimArgs = @()
     }
 
-    if (($encoderParameters)) {
-        if ($VideoEncoder -eq "libaom-av1") {
-            $codecparam = "aom" # why did they do this, it should have been aom-av1-params just like svtav1-params
-        }
-        else {
-            $codecparam = $VideoEncoder.Substring(3) # literally just cut the first 3 letters of the codec, since its gonna be "lib". NVENC does not have a -params option, but that should be obvious to the knowledgeable user so i wont bother checking for it. Same for libvpx-vp9 (?)
-        }
-
-        $FFmpegCodecParams = @(
-            "-$codecparam-params", "$encoderParameters"
-        )
-    }
-    else {
-        $FFmpegCodecParams = @()
-    }
-
     if ($fancyrename) {
         # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
-        if ($TargetVideoSize_MiB) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
+        if ($PSBoundParameters.ContainsKey('TargetVideoSize_MiB')) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
         else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
     }
     else {
@@ -452,13 +452,13 @@ while (1) {
     $EncodingAttempts++
 
     $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile).Length / 1MB
-    if ($TargetVideoSize_MiB -and ($MiBresultsize -ge $TargetVideoSize_MiB)) {
+    if (($MiBresultsize -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
             if ($JustTrimmingEnabled){
                 Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size"
                 Write-Warning("Just trimming the video failed to get it down to size. Falling back to re-encoding.")
                 
-                $fancyrename = ($PSBoundParameters['fancyrename'] -eq $false) ? $PSBoundParameters['fancyrename'] : $true
+                $fancyrename = ($PSBoundParameters['fancyrename'] -eq $false) ? $PSBoundParameters['fancyrename'] : $true # if fancyrename was bound and set to false, keep it that way. if it wasnt bound or its true enable it since it was disabled automatically
             } 
             else {
                 Write-Warning "Resulting file size ($MiBresultsize MiB) is over the target size. Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
