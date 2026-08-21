@@ -38,7 +38,7 @@ param(
     [Alias("ca")]
     $SelectedAudioCodec = "libopus", # other available codecs: aac
     [Alias("bra")]
-    [float]$TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower
+    [float]$TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower. If target bitrate is set to 0 you can mute the audio entierly (will discard audio streams)
     $ForceAudioEncoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
     $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accommodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
 
@@ -141,44 +141,59 @@ else {
 # Probe audio bitrate
 $GetAudioBitrateAttempts = 1
 $AudioStreamsExist = [bool](ffprobe -v error -select_streams a -show_entries stream=index -of csv $InputVideo)
-while (($StartingAudioBitrate_kbps -eq "N/A") -or -not($StartingAudioBitrate_kbps) -and $AudioStreamsExist){
-    switch ($GetAudioBitrateAttempts) {
-        1 {
-            $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:$InputAudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
+if ($AudioStreamsExist){
+    while (($StartingAudioBitrate_kbps -eq "N/A") -or -not($StartingAudioBitrate_kbps)){
+        switch ($GetAudioBitrateAttempts) {
+            1 {
+                $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:$InputAudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
+            }
+            default {
+                [float]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:$InputAudioStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+                $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
+            }
         }
-        default {
-            [float]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:$InputAudioStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
-            $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
-        }
+        $GetAudioBitrateAttempts++
     }
-    $GetAudioBitrateAttempts++
 }
+else {
+    $StartingAudioBitrate_kbps = 0
+}
+
 
 # Probe video bitrate
 $GetVideoBitrateAttempts = 1
 $VideoStreamsExist = [bool](ffprobe -v error -select_streams v -show_entries stream=index -of csv $InputVideo)
-while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbps) -and $VideoStreamsExist ){
-    switch ($GetVideoBitrateAttempts) {
-        1 {
-            $StartingVideoBitrate_kbps = (ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
+if ($VideoStreamsExist){
+    while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbps) -and $VideoStreamsExist ){
+        switch ($GetVideoBitrateAttempts) {
+            1 {
+                $StartingVideoBitrate_kbps = (ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
+            }
+            default {
+                [float]$StartingVideoSize_KiB = (ffmpeg -i $InputVideo -map 0:v:$InputVideoStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
+                $StartingVideoBitrate_kbps = ($StartingVideoSize_KiB * 8.192) / $StartingVideoDuration_sec
+            }
         }
-        default {
-            [float]$StartingVideoSize_KiB = (ffmpeg -i $InputVideo -map 0:v:$InputVideoStream -c copy -f null NUL 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
-            $StartingVideoBitrate_kbps = ($StartingVideoSize_KiB * 8.192) / $StartingVideoDuration_sec
-        }
+        $GetVideoBitrateAttempts++
     }
-    $GetVideoBitrateAttempts++
+} else {
+    Write-Error "Input file has no video streams!"
+    exit
 }
 
+
 $TargetAudioCodec = $SelectedAudioCodec
-if (($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) -and $StartingAudioBitrate_kbps) {
-    if (-not $ForceAudioEncoding) {
-        Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
-        $TargetAudioCodec = "copy"
+if ($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) {
+    if (-not ($StartingAudioBitrate_kbps -eq 0)){
+        if (-not $ForceAudioEncoding) {
+            Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
+            $TargetAudioCodec = "copy"
+        }
+        else {
+            Write-Warning "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
+        } 
     }
-    else {
-        Write-Warning "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
-    }
+
     $TargetAudioBitrate_kbps = $StartingAudioBitrate_kbps
 }
 
@@ -353,9 +368,6 @@ while (1) {
                 "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
             )
         }
-        else {
-            $FFmpegVideoRescaleArgs = @()
-        }
 
         if (($encoderParameters)) {
             if ($VideoEncoder -eq "libaom-av1") {
@@ -369,10 +381,12 @@ while (1) {
                 "-$codecparam-params", "$encoderParameters"
             )
         }
-        else {
-            $FFmpegCodecParams = @()
-        }
     } # end of skip when just trimming
+
+    if ($TargetAudioBitrate_kbps -eq 0){
+        $FFmpegDiscardAudio = "-an"
+        Write-Host "Target Audio Bitrate is 0. Audio streams will be discared"
+    }
 
     if (($InputAudioStream -gt 0) -or ($InputVideoStream -gt 0)) {
         $FFmpegMapVideoArgs = @(
@@ -381,10 +395,6 @@ while (1) {
         $FFmpegMapAudioArgs = @(
             "-map", "0:a:$InputAudioStream"
         )
-    }
-    else {
-        $FFmpegMapVideoArgs = @()
-        $FFmpegMapAudioArgs = @()
     }
 
     if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
@@ -399,9 +409,6 @@ while (1) {
                 "-to", $TargetVideoTrimEnd
             )
         }
-    }
-    else {
-        $FFmpegTrimArgs = @()
     }
 
     if ($IsWindows){
@@ -447,13 +454,13 @@ while (1) {
 
             Write-Host "Start final pass..."
             #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FFmpegDiscardAudio $FinalOutputFile
         }
         else {
             # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
             Write-Host "Start final pass..."
             #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FFmpegDiscardAudio $FinalOutputFile
         }
     }     
 

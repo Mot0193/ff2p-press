@@ -102,4 +102,6 @@ libvpx-vp9 supports these "[cpu-used](https://ffmpeg.org/ffmpeg-codecs.html#Opti
 ## Audio codecs: libopus (opus) / aac
 The default is libopus at 128k bitrate (if the input video's bitrate isn't lower). From what I read, opus does great at medium bitrates (64k, 128k, 192k), but at _very_ low bitrates you might want to try AAC. At high bitrates the difference between codecs is minor. 
 
-By default, the script will skip encoding the audio if the bitrate is already below the target, and it will just copy the audio from the input video to the output video. In this case you may use `-ForceAudioTranscoding 1` to forcefully re-encode the audio to your selected codec, but it will still use the input video's audio bitrate if it's lower than the target audio bitrate.
+By default, the script will skip encoding the audio if the bitrate is already below the target, and it will just copy the audio from the input video to the output video. In this case you may use `-ForceAudioEncoding 1` to forcefully re-encode the audio to your selected codec, but it will still use the input video's audio bitrate if it's lower than the target audio bitrate.
+
+You can mute the audio by setting the target audio bitrate to 0 like so: `-bra 0`
