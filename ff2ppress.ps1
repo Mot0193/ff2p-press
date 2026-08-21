@@ -12,8 +12,6 @@ param(
     $VideoEncoder = "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1, libvpx-vp9
     [Alias("cvpreset")]
     $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8, libvpx-vp9 - 4
-    [Alias("nvenctune")]
-    $NvencTuneLevel = "hq", # you may optionally change the -tune parameter when using nvenc encoders. This was mainly added to test the uhq tuning level, which is only available for hevc_nvenc for certain gpus.
     [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon separated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
     $encoderParameters,
 
@@ -45,7 +43,10 @@ param(
     [Alias("retry")]
     $RetryEncodingIfTargetNotMet = $true, # enable to make the script automatically retry to encode the video if the resulting file is over the size. It will retry multiple times while lowering the bitrate each time
     [Alias("retrylow")]
-    $RetryEncodingPercentageLowAmount = 2 # the percentage of how much the script should lower the bitrate for each try when the video fails to hit the file target
+    $RetryEncodingPercentageLowAmount = 2, # the percentage of how much the script should lower the bitrate for each try when the video fails to hit the file target
+
+    [Alias("ffmpegargs")]
+    $FFmpegUserArguments
 )
 Set-Location $PSScriptRoot
 
@@ -219,6 +220,11 @@ if ($TargetVideoBitrate_kbps -le 0) {
     exit
 }
 
+if ($FFmpegUserArguments){
+    $FFmpegUserArguments = $FFmpegUserArguments -split ' '
+    # clod pointed out this will not work if some ffmpeg arguments contain quoted text, such as when using drawtext like so: "-vf drawtext=text='hello testing':fontsize=24:x=10:y=10", but then it proceeded to give me regex that doesnt work, and i couldnt bother to figure it out myself, so sorry to anyone who wants to draw text on their videos i guess. (Unsure if this issue comes up in other commands as well)
+}
+
 $EncodingAttempts = 0
 $EncodeTotalStartTime = Get-Date
 
@@ -262,18 +268,9 @@ while (1) {
                 }
                 $VideoEncoderPreset = "p7"
             }
-            if ($NvencTuneLevel -eq "uhq") {
-                if ($VideoEncoder -eq "h264_nvenc") {
-                    Write-Warning "UHQ (ultra high quality) tuning for h264_nvenc is unavailable. Using HQ tuning instead."
-                    $NvencTuneLevel = "hq"
-                }
-                else {
-                    Write-Warning "Using UHQ (ultra high quality) tuning for hevc_nvenc. The encoding time will be slower!"
-                }
-            }
+
             $FFmpegExtraVideoArgs = @(
                 "-rc", "cbr",
-                "-tune", "$NvencTuneLevel",
                 "-multipass", "fullres"
             )
         }
@@ -434,18 +431,20 @@ while (1) {
     else {
         if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
             Write-Host "Start 1st pass..."
-            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
+            Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegUserArguments $FFmpegMapVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
+            pause
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegUserArguments @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
 
             Write-Host "Start final pass..."
-            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+            # Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegUserArguments $FFmpegMapVideoArgs $FFmpegMapAudioArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegUserArguments @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
         }
         else {
             # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
             Write-Host "Start final pass..."
-            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
+            Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegUserArguments $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
+            pause
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegUserArguments @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
         }
     }     
 
