@@ -2,7 +2,7 @@
 FF2PPress is a PowerShell script that uses ffmpeg 2-pass encoding to compress videos to a given size. It supports several video encoders provided by ffmpeg, as well as the option to pass advanced parameters and options.
 
 ## ffmpeg installation
-Make sure to install an ffmpeg package that contains all the supported codecs you wish to use. If you're on Windows, you can install the "full" ffmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
+Make sure to install an ffmpeg package that contains all the supported encoders you wish to use. If you're on Windows, you can install the "full" ffmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
 
 ```
 winget install ffmpeg
@@ -25,11 +25,11 @@ You can see all the parameters you can set at the top of the ps1 script. All of 
 |---|---|
 |C:\path\to\script\ff2ppress.ps1 -i "C:\Users\Mot\Videos\BLUE PRINCE\originals\BLUE PRINCE_01.08.2026_20-59-23.mp4"|Compress the input video with the default settings to the default size (20 MiB)|
 |.\ff2ppress.ps1 -i "C:\Users\mot\Desktop\Overwatch.mp4" -s 30|Compresses the input video to the selected size with the default settings|
-|.\ff2ppress.ps1 -i "C:\Users\mot\Desktop\drive.mp4" -s 30 -cvpreset veryslow -cv libx264|Change the default video codec and use a different preset compatible with the codec|
+|.\ff2ppress.ps1 -i "C:\Users\mot\Desktop\drive.mp4" -s 30 -cvpreset veryslow -cv libx264|Change the default video encoder and use a different preset compatible with it|
 |C:\path\to\script\ff2ppress.ps1  -i "C:\Users\mot\Desktop\VeryGoodVideo.mp4" -s 16 -fancyrename 0|Disable fancy rename. Files will just be named `compressed_<original_video_name>`|
 
 # Supported Encoders
-The default video encoder is libx265 at the "medium" preset, and the audio encoder is libopus at 128kbps bitrate. I manually picked the default preset for each codec, which i considered to be balanced enough for most users. You can of course change the video codec with `-cv` and the preset with `-cvpreset`, and even modify the default values in the "param" block at the top of the script.
+The default video encoder is libx265 at the "medium" preset, and the audio encoder is libopus at 128kbps bitrate. I manually picked the default preset for each encoder, which i considered to be balanced enough for most users. You can of course change the video encoder with `-cv` and the preset with `-cvpreset`, and even modify the default values in the "param" block at the top of the script.
 
 ## libx265 (hevc/H265)
 H265 is a decent codec overall, but libx265 is pretty slow for what it offers. In most cases i found that using libsvtav1 (AV1) is both faster and yields higher quality. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
@@ -39,7 +39,7 @@ libx265 supports these [presets](https://x265.readthedocs.io/en/master/presets.h
 The default preset is "medium"
 
 ## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
-In general, hardware-accelerated codecs may provide worse quality than their software (cpu) versions (in this case, compared to libx265), but they are A LOT faster even at the highest quality/preset settings.
+In general, hardware-accelerated encoders may provide worse quality than their software (cpu) versions (in this case, compared to libx265), but they are A LOT faster even at the highest quality/preset settings.
 For this reason, I wouldn't go below the max preset for nvenc encoders, and some options are completely hardcoded with the use of a high quality preset in mind (such as enabling double pass with the full resolution. Normally, lower presets might disable this)
 
 > [!NOTE]
@@ -75,15 +75,7 @@ CBR (Constant bitrate) is also enabled.
 > [!WARNING]
 > Make sure your ffmpeg version is at least 8.1 in order to properly use svtav1 in 2-pass mode!
 
-<details>
-<summary>More info about svtav1 and 2-pass encoding with ffmpeg</summary>
-
-Up until recently, ffmpeg did NOT support svt-av1 multi-pass mode. FF2PPress can use 2pass encoding with svt-av1 by using SvtAv1EncApp in conjunction with ffmpeg (ffmpeg piping the video to svtav1encapp), but that requires SvtAv1EncApp.exe to be added to path, or in the same directory as the script. You may [compile SvtAv1EncApp yourself](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Build-Guide.md).
-
-As of ffmpeg version 8.1 proper [2-pass support for svt-av1](https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/21239) got added to ffmpeg. Ff2ppress assumes you are using the latest version of ffmpeg, so when using libsvtav1 it will try to 2-pass the video. On older versions of ffmpeg this would have just resulted in the video getting 1-pass encoded twice, wasting your time for no real benefit.
-</details>
-
-AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets and many other fancy features, and in general it's the recommended av1 encoder to use. If you wish to use some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), you can use ff2ppress's -params argument to pass codec-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for more info)
+AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets and many other fancy features, and in general it's the recommended av1 encoder to use. If you wish to use some of its features, such as [Variance Boost](https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/Docs/Appendix-Variance-Boost.md), you can use ff2ppress's -params argument to pass encoder-specific arguments to ffmpeg. (Read the param block comment in the ps1 script for more info)
 
 SVT-AV1 has matured a lot, and from my experience its pretty fast for the quality it can achieve. In some cases since AV1 is royalty-free, it can have better service support compared to h265. But some devices, especially smartphones, can struggle to play AV1 videos as they may be lacking hardware AV1 decoders.
 

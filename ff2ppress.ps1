@@ -18,9 +18,9 @@ param(
     $encoderParameters,
 
     [Alias("h")]
-    $inputTargetVideoHeight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The default values (-1) do not rescale the video
+    $TargetVideoHeight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The default values (-1) do not rescale the video
     [Alias("w")]
-    $inputTargetVideoWidth = -1,
+    $TargetVideoWidth = -1,
     [Alias("trim")]
     $TargetVideoTrim, # Set the start and end timestamps to trim the video, seperated by "-". The timestamps can have the following formats: Seconds (example: "-trim 5-10"); MM:SS ("-trim 0:15-1:30"); HH:MM:SS ("-trim 1:10:05-2:40:30"); HH:MM:SS.mmm ("-trim 1:10:05.250-2:40:30.750"). You can also pass "end" as the end timestamp, to set it to the end of the video like so: "-trim 5-end", "-trim 0:15-end"
     $ForceVideoEncoding = 1, # when using -trim, there could be a chance that the target video bitrate will end up being higher than the starting video target. This means trimming the video will theoretically be enough to get under the target file size without having to re-encode the video. Setting "-ForceVideoEncoding" to "1" will make ffmpeg re-encode the video in this case, even if the target video bitrate is higher than the input. Setting "-ForceVideoEncoding" to "0" will copy the video and audio codec while still trimming the video, but it may result into a choppy video or the start of the video may be black for a few seconds.
@@ -42,15 +42,24 @@ param(
     $ForceAudioEncoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
     $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accommodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
 
-    [Alias("svtav1app")]
-    $isSvtav1encappAvailable = $false, # disable to manually force the use of svt-av1 via ffmpeg, in case svtav1encapp is available. If its left true by default, the script will auto-detect if svtav1encapp is available, and use it instead of ffmpeg's svt-av1 version.
-
     [Alias("retry")]
     $RetryEncodingIfTargetNotMet = $true, # enable to make the script automatically retry to encode the video if the resulting file is over the size. It will retry multiple times while lowering the bitrate each time
     [Alias("retrylow")]
     $RetryEncodingPercentageLowAmount = 2 # the percentage of how much the script should lower the bitrate for each try when the video fails to hit the file target
 )
 Set-Location $PSScriptRoot
+
+$IsFfmpegAvailable = [bool] (Get-Command -ErrorAction Ignore -Type Application ffmpeg)
+if (-not $IsFfmpegAvailable){
+    Write-Error "ffmpeg is not installed or not in PATH."
+    exit
+}
+else {
+    $FfmpegVersionOutput = & ffmpeg -version 2>$null | Select-Object -First 1
+    if ($FfmpegVersionOutput -match "ffmpeg version\s(?:n)?(\d+(\.\d+)*)") {
+        $FoundFfmpegVersion = [version]$matches[1]
+    }
+}
 
 $StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length / 1MB
 if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $TargetVideoBitrate_kbps -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
@@ -235,20 +244,6 @@ while (1) {
         if ($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps -and $EncodingAttempts -lt 1) {
             Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, but in this case the video will be encoded with the higher bitrate. If you'd like, you can try using -ForceVideoEncoding 0 to only trim the video without re-encoding, but this may result in a choppy video.")
         }
-        # video resolution calculation (mostly only needed for svtav1encapp, but this needs to be here so we can print the resolution for the user)
-        $StartingVideoHeight = ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 $InputVideo
-        $StartingVideoWidth = ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 $InputVideo
-        $TargetVideoHeight = $inputTargetVideoHeight
-        $TargetVideoWidth = $inputTargetVideoWidth
-        if ($TargetVideoHeight -eq -1) { $TargetVideoHeight = $StartingVideoHeight }
-        if ($TargetVideoWidth -eq -1) { $TargetVideoWidth = $StartingVideoWidth }
-
-        if ($inputTargetVideoHeight -ne -1 -and $inputTargetVideoWidth -eq -1) {
-            $TargetVideoWidth = $StartingVideoWidth / ($StartingVideoHeight / $inputTargetVideoHeight)
-        }
-        elseif ($inputTargetVideoWidth -ne -1 -and $inputTargetVideoHeight -eq -1) {
-            $TargetVideoHeight = $StartingVideoHeight / ($StartingVideoWidth / $inputTargetVideoWidth)
-        }
 
         # Check for the codec and a correct preset. Certain codecs may also need extra arguments to work properly or to use extra features, those are set here too.
         if ($VideoEncoder -in "libx265", "libx264") {
@@ -304,44 +299,8 @@ while (1) {
                 $VideoEncoderPreset = "5"
             }
 
-            if ($isSvtav1encappAvailable -eq $true) {
-                $isSvtav1encappAvailable = [bool](Get-Command -ErrorAction Ignore -Type Application SvtAv1EncApp)
-            }
-
-            if ($isSvtav1encappAvailable -eq $false) {
-                Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. Make sure youre on the latest FFmpeg version or use SvtAv1EncApp as the readme mentions. This warning shows up without checking your ffmpeg version."
-            }
-            else {
-                Write-Warning "SvtAv1EncApp was found! Consider updating FFmpeg to version 8.1 or higher so you can use 2-pass encoding via FFmpeg."
-                $StartingVideoPixFmt = ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=noprint_wrappers=1:nokey=1 $InputVideo
-                $StartingVideoFPS = ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo
-                $StartingVideoFrameNumerator, $StartingVideoFrameDenominator = $StartingVideoFPS.Split("/")
-        
-                if ($StartingVideoPixFmt -eq "yuv420p10le") {
-                    $TargetVideoBitDepth = 10
-                }
-                else { $TargetVideoBitDepth = 8 }
-
-                $svtav1appVideoargs = @(
-                    "-i", "stdin",
-                    "-w", $TargetVideoWidth,
-                    "-h", $TargetVideoHeight,
-                    "--rc", "1",
-                    "--tbr", $TargetVideoBitrate_kbps,
-                    "--preset", $VideoEncoderPreset,
-                    "--input-depth", $TargetVideoBitDepth,
-                    "--fps-num", $StartingVideoFrameNumerator,
-                    "--fps-denom", $StartingVideoFrameDenominator,
-                    "--stats", "SvtAv1EncApp_2pass.log"
-                )
-
-                if ($encoderParameters) {
-                    $svtav1appParameters = $encoderParameters -split ':' |
-                    ForEach-Object {
-                        $name, $value = $_ -split '=', 2
-                        "--$name", $value
-                    }
-                }
+            if ($FoundFfmpegVersion -lt [version]"8.1"){
+                Write-Warning "FFmpeg versions below 8.1 DO NOT have support for 2-pass mode with SVT-AV1. Make sure youre on the latest FFmpeg version."
             }
         }
         elseif ($VideoEncoder -eq "libvpx-vp9") {
@@ -385,10 +344,10 @@ while (1) {
             exit
         }
 
-        if (($inputTargetVideoHeight -ne -1) -or ($inputTargetVideoWidth -ne -1)) {
+        if (($TargetVideoWidth -ne -1) -or ($TargetVideoHeight -ne -1)) {
             Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
             $FFmpegVideoRescaleArgs = @(
-                "-vf", "scale=$([int]$inputTargetVideoWidth)`:$([int]$inputTargetVideoHeight)",
+                "-vf", "scale=$TargetVideoWidth`:$TargetVideoHeight",
                 "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
             )
         }
@@ -455,11 +414,9 @@ while (1) {
     if (!$outputfolder) {
         $InputVideoFullPath = Resolve-Path -LiteralPath $InputVideo
         $FinalOutputFile = Join-Path $(Split-Path -LiteralPath $InputVideoFullPath) $outputfilename
-        $svtav1appOutputTempPath = Join-Path $(Split-Path -LiteralPath $InputVideoFullPath) "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
     }
     elseif (Test-Path -LiteralPath $outputfolder) {
         $FinalOutputFile = Join-Path $outputfolder $outputfilename
-        $svtav1appOutputTempPath = Join-Path $outputfolder "SvtAv1EncApp_Temp_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
     }
     else {
         Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
@@ -475,35 +432,20 @@ while (1) {
         ffmpeg -hide_banner -loglevel error -i $InputVideo @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegTrimArgs -c:v copy -c:a copy $FinalOutputFile
     }
     else {
-        if (($VideoEncoder -eq "libsvtav1") -and ($isSvtav1encappAvailable -eq $true)) {
-            # i should retire the Svtav1encapp code at some point.. Unsure if this even works anymore as im fiddling with stream mapping, and testing this would be useless now
+        if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
             Write-Host "Start 1st pass..."
-            ffmpeg -hide_banner -loglevel error -i $InputVideo $FFmpegMapVideoArgs -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 1 @svtav1appVideoargs @svtav1appParameters
+            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
 
             Write-Host "Start final pass..."
-            ffmpeg -hide_banner -loglevel error -i $InputVideo $FFmpegMapVideoArgs -an -f rawvideo @FFmpegVideoRescaleArgs @FFmpegTrimArgs - | SvtAv1EncApp --progress 0 --pass 2 @svtav1appVideoargs @svtav1appParameters -b $svtav1appOutputTempPath
-
-            Write-Host "Encoding Audio..."
-            ffmpeg -hide_banner -loglevel error -y -i $svtav1appOutputTempPath -i $InputVideo -map 0:v? @FFmpegMapAudioArgs @FFmpegTrimArgs -c:v copy @FFmpegAudioArgs $FinalOutputFile # separately encode the audio by mapping the audio from the original video and the video from the newly compressed file
-
-            Remove-Item -LiteralPath $svtav1appOutputTempPath -Force -ErrorAction SilentlyContinue
+            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
         }
         else {
-            if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
-                Write-Host "Start 1st pass..."
-                #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
-                ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
-
-                Write-Host "Start final pass..."
-                #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-                ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs -pass 2 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
-            }
-            else {
-                # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
-                Write-Host "Start final pass..."
-                Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
-                ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
-            }
+            # i still need to separate the ffmpeg command when using nvenc, since i cant pass "-pass 2" without having done pass 1 first.
+            Write-Host "Start final pass..."
+            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs $FFmpegMapVideoArgs $FFmpegMapAudioArgs $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs @FFmpegMapAudioArgs @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs @FFmpegAudioArgs $FinalOutputFile
         }
     }     
 
@@ -545,7 +487,6 @@ while (1) {
 
 Remove-Item ".\x265_2pass.log*" -Force -ErrorAction SilentlyContinue # delete 2pass log files
 Remove-Item ".\ffmpeg2pass-0.log*" -Force -ErrorAction SilentlyContinue
-Remove-Item ".\SvtAv1EncApp_2pass.log*" -Force -ErrorAction SilentlyContinue
 
 
 $EndTime = Get-Date
