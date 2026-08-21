@@ -140,7 +140,8 @@ else {
 
 # Probe audio bitrate
 $GetAudioBitrateAttempts = 1
-while (($StartingAudioBitrate_kbps -eq "N/A") -or -not($StartingAudioBitrate_kbps)){
+$AudioStreamsExist = [bool](ffprobe -v error -select_streams a -show_entries stream=index -of csv $InputVideo)
+while (($StartingAudioBitrate_kbps -eq "N/A") -or -not($StartingAudioBitrate_kbps) -and $AudioStreamsExist){
     switch ($GetAudioBitrateAttempts) {
         1 {
             $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:$InputAudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
@@ -155,7 +156,8 @@ while (($StartingAudioBitrate_kbps -eq "N/A") -or -not($StartingAudioBitrate_kbp
 
 # Probe video bitrate
 $GetVideoBitrateAttempts = 1
-while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbps)){
+$VideoStreamsExist = [bool](ffprobe -v error -select_streams v -show_entries stream=index -of csv $InputVideo)
+while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbps) -and $VideoStreamsExist ){
     switch ($GetVideoBitrateAttempts) {
         1 {
             $StartingVideoBitrate_kbps = (ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
@@ -402,6 +404,12 @@ while (1) {
         $FFmpegTrimArgs = @()
     }
 
+    if ($IsWindows){
+        $FFmpegNull = "NUL"
+    } else {
+        $FFmpegNull = "/dev/null"
+    }
+
     if ($fancyrename) {
         # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
         if ($PSBoundParameters.ContainsKey('TargetVideoSize_MiB')) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
@@ -434,8 +442,8 @@ while (1) {
     else {
         if (-not($VideoEncoder -in "hevc_nvenc", "h264_nvenc")) {
             Write-Host "Start 1st pass..."
-            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null NUL"
-            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null NUL
+            #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 1 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs -an -f null $FFmpegNull"
+            ffmpeg -hide_banner -loglevel error -stats @FFmpegBaseVideoArgs @FFmpegExtraVideoArgs @FFmpegMapVideoArgs -pass 1 @FFmpegCodecParams @FFmpegVideoRescaleArgs @FFmpegTrimArgs -an -f null $FFmpegNull
 
             Write-Host "Start final pass..."
             #Write-Host "ffmpeg -hide_banner -loglevel error -stats $FFmpegBaseVideoArgs $FFmpegExtraVideoArgs -pass 2 $FFmpegCodecParams $FFmpegVideoRescaleArgs $FFmpegTrimArgs $FFmpegAudioArgs $FinalOutputFile"
