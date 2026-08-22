@@ -1,3 +1,7 @@
 x265_2pass.log*
 ffmpeg2pass-0.log*
 SvtAv1EncApp*
+
+# Nix build symlinks
+/result
+/result-*
