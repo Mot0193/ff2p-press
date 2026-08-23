@@ -364,8 +364,7 @@ while (1) {
         if (($TargetVideoWidth -ne -1) -or ($TargetVideoHeight -ne -1)) {
             Write-Host "Rescaling the video to $TargetVideoWidth`:$TargetVideoHeight (width:height)"
             $FFmpegVideoRescaleArgs = @(
-                "-vf", "scale=$TargetVideoWidth`:$TargetVideoHeight",
-                "-sws_flags", "lanczos" # enable lanczos downscale filter for high quality scaling
+                "-vf", "scale=$TargetVideoWidth`:$TargetVideoHeight"
             )
         }
 
@@ -413,7 +412,7 @@ while (1) {
 
     if ($fancyrename) {
         # I just realized im converting all files to MP4, regardless of their original file extension. Meh whatever mp4 is good enough
-        if ($PSBoundParameters.ContainsKey('TargetVideoSize_MiB')) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
+        if (-not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) { $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
         else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
     }
     else {
