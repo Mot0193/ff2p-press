@@ -26,6 +26,7 @@
             runHook preInstall
 
             install -Dm644 ff2ppress.ps1 $out/share/ff2p-press/ff2ppress.ps1
+            install -Dm644 -t $out/share/ff2p-press/sources sources/*.ps1
 
             makeWrapper ${pkgs.powershell}/bin/pwsh $out/bin/ff2ppress \
               --add-flags "-NoProfile -File $out/share/ff2p-press/ff2ppress.ps1" \
