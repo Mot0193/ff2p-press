@@ -1,49 +1,48 @@
 param(
     [Alias("i")]
-    $InputVideo, # the path of the video you want to compress
+    $InputVideo,
     [Alias("s")]
-    [float]$TargetVideoSize_MiB = 20, # set a target size in MiB
+    [float]$TargetVideoSize_MiB = 20,
 
     [Alias("o")]
-    $outputfolder, # output folder. Defaults to outputting in the same folder as the input video
-    $fancyrename = $true, # pass "0" for false when changing. Disables codec information in the output file name (e.g resulting videos will only be named "compressed_<video_name>")
+    $OutputFolder,
+    $FancyRename = $true,
 
     [Alias("cv")]
-    $VideoEncoder = "libx265", # other available codecs: hevc_nvenc, libx264, h264_nvenc, libsvtav1, libaom-av1, libvpx-vp9
+    $VideoEncoder = "libx265",
     [Alias("cvpreset")]
-    $VideoEncoderPreset = "medium", # defaults automatically on: hevc_nvenc - p7, libx264 - medium, h264_nvenc - p7, libsvtav1 - 5, libaom-av1 - 8, libvpx-vp9 - 4
-    [Alias("params")] # pass extra, codec-specific arguments to ffmpeg. For example using "-params lp=2" will pass "-<codec>-params lp=2" to ffmpeg. In this case "lp" is used with libsvtav1, so "-svtav1-params lp=2" will get passed to ffmpeg. Multiple parameters can be added if theyre colon separated (e.g enable-variance-boost=1:variance-boost-strength=2:variance-octile=5)
-    $encoderParameters,
+    $VideoEncoderPreset,
+    [Alias("params")]
+    $EncoderParameters,
 
     [Alias("h")]
-    $TargetVideoHeight = -1, # set a video Height or Width (-h / -w) in pixels to rescale the output video. You can just use one of these and the other side will get automatically scaled to keep the same aspect ratio (e.g -h 1080). The default values (-1) do not rescale the video
+    $TargetVideoHeight = -1,
     [Alias("w")]
     $TargetVideoWidth = -1,
     [Alias("trim")]
-    $TargetVideoTrim, # Set the start and end timestamps to trim the video, seperated by "-". The timestamps can have the following formats: Seconds (example: "-trim 5-10"); MM:SS ("-trim 0:15-1:30"); HH:MM:SS ("-trim 1:10:05-2:40:30"); HH:MM:SS.mmm ("-trim 1:10:05.250-2:40:30.750"). You can also pass "end" as the end timestamp, to set it to the end of the video like so: "-trim 5-end", "-trim 0:15-end"
-    $ForceVideoEncoding = 1, # when using -trim, there could be a chance that the target video bitrate will end up being higher than the starting video target. This means trimming the video will theoretically be enough to get under the target file size without having to re-encode the video. Setting "-ForceVideoEncoding" to "1" will make ffmpeg re-encode the video in this case, even if the target video bitrate is higher than the input. Setting "-ForceVideoEncoding" to "0" will copy the video and audio codec while still trimming the video, but it may result into a choppy video or the start of the video may be black for a few seconds.
+    $TargetVideoTrim,
+    $ForceVideoEncoding = 1,
     [Alias("brv")]
-    [float]$TargetVideoBitrate_kbps, # can be used instead of -s or -brlow to manually set a bitrate in kbps (e.g -brv 1000)
+    [float]$TargetVideoBitrate_kbps,
     [Alias("brlow")]
-    $BitratePercentageLow = 0, # a percentage of how much the final target video bitrate should be lowered. For example if the final target bitrate would be 1000 kbps but its lowered 5%, the bitrate will be 950kbps instead. 
-    # This can be used without setting a target size (-s) to instead lower the input video's bitrate by the percentage and using that as the target. In practice this is almost the equivalent of lowering the file size by a percentage
+    $BitratePercentageLow = 0,
 
     [Alias("audiostream")]
-    $InputAudioStream = 0, # if the input video has several video or audio streams, you may choose which ones to use for the output file. You can only choose one audio and one video stream. By default, the script takes the first audio and video stream that is available (indexes start at 0). Example: Input video file has 2 audio tracks/streams, but if you wish to only use the 2nd audio stream for the compressed video, use -audiostream 1
+    $InputAudioStream = 0,
     [Alias("videostream")]
     $InputVideoStream = 0,
 
     [Alias("ca")]
-    $SelectedAudioCodec = "libopus", # other available codecs: aac
+    $SelectedAudioEncoder = "libopus",
     [Alias("bra")]
-    [float]$TargetAudioBitrate_kbps = "128", # Or the input video's bit rate, whichever is lower. If target bitrate is set to 0 you can mute the audio entierly (will discard audio streams)
-    $ForceAudioEncoding = $false, # In case the input video audio bitrate is lower than the target, copy the audio instead of transcoding. You may set this to true (1) id you'd like to forcefully re-encode the audio with the smaller bitrate. (e.g If input video's audio is aac at 100kbps and the target is opus at 128kbps, using -ForceAudioTranscoding 1 will encode opus at 100kbps. Setting it to false (the default) will just copy the audio, resulting in aac 100k)
-    $PrioritizeAudioBitrate = $false, # In case the resulting audio size would take up more than 20% of the entire target file size, the script automatically recalculates the audio bitrate so the audio would take up 20% of the file. You can force your desired bitrate to be used, and instead the video bitrate will be recalculated to accommodate the inflated audo bitrate. If the audio bitrate would take 100% or more of the target bitrate, the script wont continue.
+    [float]$TargetAudioBitrate_kbps = "128",
+    $ForceAudioEncoding = $false,
+    $PrioritizeAudioBitrate = $false,
 
     [Alias("retry")]
-    $RetryEncodingIfTargetNotMet = $true, # enable to make the script automatically retry to encode the video if the resulting file is over the size. It will retry multiple times while lowering the bitrate each time
+    $RetryEncodingIfTargetNotMet = $true,
     [Alias("retrylow")]
-    $RetryEncodingPercentageLowAmount = 2, # the percentage of how much the script should lower the bitrate for each try when the video fails to hit the file target
+    $RetryEncodingPercentageLowAmount = 2,
 
     [Parameter(ValueFromRemainingArguments)]
     [string[]]$RemainingFFmpegUserArguments
@@ -161,12 +160,12 @@ if ($VideoStreamsExist){
 }
 
 
-$TargetAudioCodec = $SelectedAudioCodec
+$TargetAudioEncoder = $SelectedAudioEncoder
 if ($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) {
     if (-not ($StartingAudioBitrate_kbps -eq 0)){
         if (-not $ForceAudioEncoding) {
             Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
-            $TargetAudioCodec = "copy"
+            $TargetAudioEncoder = "copy"
         }
         else {
             Write-Warning "Audio bitrate of the input video is lower than the target bitrate. Using $StartingAudioBitrate_kbps`kbps instead of $TargetAudioBitrate_kbps`kbps"
@@ -190,7 +189,7 @@ if (-not($TargetVideoBitrate_kbps)){
             if (-not $PrioritizeAudioBitrate) {
                 Write-Host "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
                 # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-                $TargetAudioCodec = $SelectedAudioCodec # dont forget to also re-select the codec. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once again
+                $TargetAudioEncoder = $SelectedAudioEncoder # dont forget to also re-select the codec. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once again
                 $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
                 $TargetAudioSize_kbit = $TargetAudioBitrate_kbps * $TargetVideoDuration_sec
             }
@@ -261,8 +260,8 @@ while (1){
         "aac",
         "copy"
     )
-    if (-not $AudioEncoders.Contains($TargetAudioCodec)){
-        Write-Error "Unknown/Unavailable audio codec: $TargetAudioCodec. Check the available codecs in readme"
+    if (-not $AudioEncoders.Contains($TargetAudioEncoder)){
+        Write-Error "Unknown/Unavailable audio codec: $TargetAudioEncoder. Check the available codecs in readme"
         exit 1
     }
 
@@ -271,7 +270,7 @@ while (1){
             Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, so in this case the video will just be trimmed without re-encoding")
             Write-Warning("For certain videos this approach may result in a choppy video. A safer alternative would be to re-encode the video with the higher bitrate by using -ForceVideoEncoding 1")
             $JustTrimmingEnabled = $true
-            $fancyrename = $false
+            $FancyRename = $false
         }
         else {
             Write-Warning("Target video bitrate is higher than the starting bitrate. You probably used -trim, so in this case the video will be encoded with the higher bitrate.")
@@ -286,7 +285,7 @@ while (1){
     } else { $JustTrimmingEnabled = $false }
 
 
-    if ($fancyrename) {
+    if ($FancyRename) {
         if (-not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) { 
             $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" 
         }
@@ -296,15 +295,15 @@ while (1){
         $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
     }
 
-    if (-not $outputfolder) {
+    if (-not $OutputFolder) {
         $InputVideoFullPath = Resolve-Path -LiteralPath $InputVideo
         $FinalOutputFile = Join-Path $(Split-Path -LiteralPath $InputVideoFullPath) $outputfilename
     }
-    elseif (Test-Path -LiteralPath $outputfolder) {
-        $FinalOutputFile = Join-Path $outputfolder $outputfilename
+    elseif (Test-Path -LiteralPath $OutputFolder) {
+        $FinalOutputFile = Join-Path $OutputFolder $outputfilename
     }
     else {
-        Write-Error "Output folder is invalid or doesnt exist! Path: $outputfolder" 
+        Write-Error "Output folder is invalid or doesnt exist! Path: $OutputFolder" 
         exit
     }
 
@@ -343,9 +342,9 @@ while (1){
             $FFmpegArg_Pass2.AddRange( [string[]]@("-preset", $VideoEncoderPreset) )
         }
 
-        if ($TargetAudioCodec -in "libopus", "aac", "copy") {
+        if ($TargetAudioEncoder -in "libopus", "aac", "copy") {
             $FFmpegArg_Pass1.Add("-an") # discard audio on the 1st pass
-            $FFmpegArg_Pass2.AddRange( [string[]]@("-c:a", $TargetAudioCodec, "-b:a", "$TargetAudioBitrate_kbps`k") )
+            $FFmpegArg_Pass2.AddRange( [string[]]@("-c:a", $TargetAudioEncoder, "-b:a", "$TargetAudioBitrate_kbps`k") )
         }
         else {
             Write-Error "Unknown/Unavailable audio codec. Check the available codecs in readme"
@@ -369,7 +368,7 @@ while (1){
             $FFmpegArg_Pass2.AddRange( [string[]]@("-pass", "2", "-passlogfile", $PassLogPrefix) )
         }
 
-        if (($encoderParameters) -and $EncoderInfo.ContainsKey("EncParamsCompatible")) {
+        if (($EncoderParameters) -and $EncoderInfo.ContainsKey("EncParamsCompatible")) {
             if ($VideoEncoder -eq "libaom-av1") {
                 $codecparam = "aom" # the correct parameter name for this is -aom-params
             }
@@ -377,8 +376,8 @@ while (1){
                 $codecparam = $VideoEncoder.Substring(3) # other encoders just start with "lib", so im just cutting the first 3 letters
             }
 
-            $FFmpegArg_Pass1.AddRange( [string[]]@("-$codecparam-params", "$encoderParameters") )
-            $FFmpegArg_Pass2.AddRange( [string[]]@("-$codecparam-params", "$encoderParameters") )
+            $FFmpegArg_Pass1.AddRange( [string[]]@("-$codecparam-params", "$EncoderParameters") )
+            $FFmpegArg_Pass2.AddRange( [string[]]@("-$codecparam-params", "$EncoderParameters") )
         }
 
         if (($TargetVideoWidth -ne -1) -or ($TargetVideoHeight -ne -1)) {
@@ -459,7 +458,7 @@ while (1){
 
             if ($JustTrimmingEnabled){
                 Write-Warning("Just trimming the video failed to get it down to size. Falling back to re-encoding...")
-                $fancyrename = ($PSBoundParameters['fancyrename'] -eq $false) ? $PSBoundParameters['fancyrename'] : $true # if fancyrename was bound and set to false, keep it that way. if it wasnt bound or its true enable it since it was disabled automatically
+                $FancyRename = ($PSBoundParameters['FancyRename'] -eq $false) ? $PSBoundParameters['FancyRename'] : $true # if FancyRename was bound and set to false, keep it that way. if it wasnt bound or its true enable it since it was disabled automatically
             }
             else {
                 Write-Warning "Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
