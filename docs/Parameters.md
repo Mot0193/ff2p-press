@@ -2,7 +2,7 @@
 Here you can find a list of the parameters and flags you can pass to ff2ppress, explainations on what each of them does, and usage examples.
 Some parameters have name aliases. You can either use them by their full name or by the alias. For example, you can use either `-inputvideo` _or_ `-i`.
 
-Most of these parameters have default values. If you’d like, you can change the defaults by editing the `param()` block at the top of `ff2ppress.ps1`. Parameters that don’t have a default value, or it’s mentioned that they will default to some value later in the code, are optional.
+Most of these parameters have default values. If you’d like, you can change the defaults by editing the `param()` block at the top of `ff2ppress.ps1`.
 
 To enable/disable boolean parameters, you can pass 1 or 0, respectively. For example: `-FancyRename 0` or `-retry 1`
 

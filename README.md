@@ -4,11 +4,11 @@ FF2ppress is a PowerShell script that uses 2-pass encoding via FFmpeg to compres
 
 FF2ppress's main feature is customizability and control, allowing you to change advanced FFmpeg settings and parameters, such as:
 
-* Trimming the video;
-* Changing the video encoder and preset;
-* Passing parameters to the encoder;
-* Specifying the output audio or video stream of a multi-stream file;
-* Being able to pass most FFmpeg arguments directly, which opens up the majority of FFmpeg’s functionality;
+* [Trimming](/docs/Parameters.md#-targetvideotrim-alias--trim) the video;
+* Changing the [video encoder](/docs/Parameters.md#-videoencoder-alias--cv) and [preset](/docs/Parameters.md#-videoencoderpreset-alias--cvpreset);
+* [Passing parameters](/docs/Parameters.md#-encoderparameters-alias--params) to the encoder;
+* Specifying the output [audio or video stream](/docs/Parameters.md#-inputaudiostream-alias--audiostream) of a multi-stream file;
+* Being able to pass most [FFmpeg arguments directly](/docs/Parameters.md#passing-other-ffmpeg-arguments), which opens up the majority of FFmpeg’s functionality;
 
 This customizability tries not to sacrifice ease of use: The script comes with hand-picked defaults; It tries to automatically deal with most scenarios and edge cases; And it comes with parameters that simplify some of the more common FFmpeg use cases (such as downscaling the resolution or trimming the video).
 
@@ -16,23 +16,22 @@ This customizability tries not to sacrifice ease of use: The script comes with h
 
 ## On Windows
 
-On Windows, make sure PowerShell and FFmpeg are installed and updated. 
+On Windows, make sure PowerShell and FFmpeg are installed and updated.
+Your FFmpeg version should be above 8.1, and it should contain all the script-compatible video encoders that you wish to use. You can install the "full" FFmpeg release from gyan.dev:
 ```
- winget install Microsoft.PowerShell
-```
-Your FFmpeg version should be above 8.1, and it should contain all the script-compatible video encoders that you wish to use. You can install the “full” FFmpeg release from gyan.dev:
-```
+winget install Microsoft.PowerShell
 winget install ffmpeg
 ```
+
 Download or clone the repository:
 ```
 git clone https://github.com/Mot0193/ff2p-press.git && cd ff2p-press
 ```
-If you get the error:`The file ff2ppress.ps1 is not digitally signed.`when you try to run ff2ppress.ps1, open a Powershell window and run:
+If you get this error when you try to run ff2ppress.ps1: `The file ff2ppress.ps1 is not digitally signed`, open a Powershell window and run:
 ```
- dir -r C:\path\to\folder\ff2p-press\*.ps1 | Unblock-File
+dir -r C:\path\to\folder\ff2p-press\*.ps1 | Unblock-File
 ```
-You may of course add ff2ppress.ps1 to your PATH variable if youd like.
+You may add ff2ppress.ps1 to your PATH variable if you'd like.
 ## Via Nix
 
 FF2ppress contains a [Nix flake](https://nix.dev/concepts/flakes), which makes installation easy on systems that use [Nix](https://nixos.org/learn/).
@@ -62,6 +61,6 @@ Here you can find a short list of the most common parameters and use cases. You 
 ## Examples of Usage
 | Example command | Explanation |
 |---|---|
-|C:\path\to\script\ff2ppress.ps1 -i "C:\Users\Mot\Videos\BLUE PRINCE.mp4"| Compress the input video with the default settings to the default size (20 MiB)|
-|.\ff2ppress.ps1 -i "C:\Users\mot\Desktop\Overwatch.mp4" -s 50 -cv libx264 | Compresses the input video to 30 MiB with the selected video encoder|
+|C:\path\to\script\ff2ppress.ps1 -i "C:\Users\Mot\Videos\BLUE PRINCE.mp4" | Compress the input video with the default settings to the default size (20 MiB)|
+|.\ff2ppress.ps1 -i "C:\Users\mot\Desktop\Overwatch.mp4" -s 50 -cv libx264 | Compresses the input video to 50 MiB with the selected video encoder|
 |ff2ppress -i "C:\Users\mot\Desktop\drive.mp4" -cv libsvtav1 -cvpreset 7  | Change the default video encoder and use a different preset compatible with it|
