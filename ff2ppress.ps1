@@ -66,7 +66,14 @@ if (-not $IsFfmpegAvailable){
     exit 1
 }
 
-$StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo).Length / 1MB
+try {
+    $StartingVideoSize_MiB = (Get-Item -LiteralPath $InputVideo -ErrorAction Stop).Length / 1MB
+}
+catch {
+    Write-Error "An input video file was not specified or does not exist"
+    exit 1
+}
+
 if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
     # check if the input video size is under the target size, but only exit if the target bitrate wasnt manually set, and if brlow was used without setting a target size
     Write-Error "Target size can't be higher than the video's current size ($StartingVideoSize_MiB)"
