@@ -118,7 +118,7 @@ Timestamps can have the following formats:
 
 The end timestamp can be set to `end` to set it to the duration of the input video; in other words, the end of the video.
 
-The video bitrate will be calculated correctly to account for the changed video duration. In some cases, the target bitrate will end up being higher than the input video bitrate. See: [ForceVideoEncoding](Parameters.md#-forcevideoencoding) parameter.
+The video bitrate will be calculated correctly to account for the changed video duration. In some cases, the target bitrate will end up being higher than the input video bitrate. See: [ForceVideoEncoding](Parameters.md#-forcevideoencoding-bool) parameter.
 
 #### Usage:
 `-trim 0-10` (keep the first 10 seconds of the video, cut out the rest)
@@ -131,8 +131,7 @@ When using [-trim](Parameters.md#-targetvideotrim-alias--trim), there could be a
 
 Enabling `ForceVideoEncoding` will always re-encode the video, even if the target video bitrate is higher than the input. Encoding may be slow, but will result in a video with no issues.
 Disabling `ForceVideoEncoding` will attmept to copy the video and audio codec while just trimming the video. This approach may result in a choppy video, or the start of the video may be black for a few seconds.
-
-Just trimming the video may not always result in a met target size, but if you have [RetryEncodingIfTargetNotMet](Parameters.md#-retryencodingiftargetnotmet-alias--retry) enabled, the script will fall back to normal re-encoding to try to get the video below the target size.
+Just trimming the video may not always result in a met target size, but if you have [RetryEncodingIfTargetNotMet](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) enabled, the script will fall back to normal re-encoding to try to get the video below the target size.
 
 Default is true.
 
@@ -151,7 +150,7 @@ A percentage of how much the final target video bitrate should be lowered. This 
 Default is 0.
 
 #### Examples:
-Sometimes the output video size overshoots the target size, and the script will have to [retry](Parameters.md#-retryencodingiftargetnotmet-alias--retry) with a lower video bitrate. If you want to make sure the video will get below the target size in one attempt, you may use `-brlow 5` to lower the target bitrate by 5%.
+Sometimes the output video size overshoots the target size, and the script will have to [retry](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) with a lower video bitrate. If you want to make sure the video will get below the target size in one attempt, you may use `-brlow 5` to lower the target bitrate by 5%.
 
 If you dont have a specific target size requirement for a video, you may use `-brlow` **without** setting [-s](Parameters.md#-targetvideosize_mib-alias--s) to lower the input video's size by a rough percentage\*. For example `-brlow 50` will lower the input video's bitrate by 50% and use that as the target bitrate.
 \*Of course `-brlow` only affects the video bitrate, so the [audio bitrate](Parameters.md#-targetaudiobitrate_kbps-alias--bra) won't be accounted for.
@@ -167,7 +166,7 @@ The audio encoder used for compressing the input video's audio. Not all FFmpeg e
 
 Default is libopus.
 
-Keep in mind that if [ForceAudioEncoding](Parameters.md#-forceaudioencoding) is disabled, and if the input video's audio bitrate is below the [target audio bitrate](Parameters.md#-targetaudiobitrate_kbps-alias--bra), the script will skip re-encoding the audio, and it will just copy the audio stream from the input video to the output video.
+Keep in mind that if [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool) is disabled, and if the input video's audio bitrate is below the [target audio bitrate](Parameters.md#-targetaudiobitrate_kbps-alias--bra), the script will skip re-encoding the audio, and it will just copy the audio stream from the input video to the output video.
 
 #### Usage:
 `-ca aac`
@@ -175,7 +174,7 @@ Keep in mind that if [ForceAudioEncoding](Parameters.md#-forceaudioencoding) is 
 
 ### -TargetAudioBitrate_kbps (Alias: -bra)
 The target audio bitrate in kbps. 
-If the input video's audio bitrate is lower than the target audio bitrate, ff2ppress will use the lower audio bitrate. In this case, if [ForceAudioEncoding](Parameters.md#-forceaudioencoding) is disabled, the script will skip re-encoding the audio and it will just copy the audio stream from the input video to the output video.
+If the input video's audio bitrate is lower than the target audio bitrate, ff2ppress will use the lower audio bitrate. In this case, if [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool) is disabled, the script will skip re-encoding the audio and it will just copy the audio stream from the input video to the output video.
 
 Default is 128.
 
@@ -229,7 +228,7 @@ If the input video has multiple video streams ff2ppress can only keep one of the
 `-videostream 7`(WHY would you have a file with this many video streams. ONE stream is enough already!!!)
 
 ### -RetryEncodingIfTargetNotMet (Alias: -retry) (bool)
-Enable to automatically retry to encode the video with a [lower video bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow) if the video fails to get down to the target size.
+Enable to automatically retry to encode the video with a [lower video bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow-bool) if the video fails to get down to the target size.
 
 Default is true.
 
