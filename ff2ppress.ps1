@@ -446,7 +446,7 @@ while (1){
         $FFmpegArg_Pass2.Add($FinalOutputFile)
     }
 
-    Write-Debug "Final JustTrimming Arg List: $FFmpegArg_JustTrimming"
+    if ($JustTrimmingEnabled) { Write-Debug "Final JustTrimming Arg List: $FFmpegArg_JustTrimming" }
     Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1"
     Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2"
     if ($DebugPreference -eq 'Continue'){ Pause } # if debug is enabled, pause the script so you can see the debug messages before starting to encode
@@ -468,7 +468,14 @@ while (1){
 
     $EncodingAttempts++
 
-    $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile).Length / 1MB
+    try {
+        $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile -ErrorAction Stop).Length / 1MB
+    }
+    catch {
+        Write-Error "Output file does not exist. An FFmpeg error may have occured."
+        exit 1
+    }
+
     if (($MiBresultsize -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
             Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size." -f $MiBresultsize)
