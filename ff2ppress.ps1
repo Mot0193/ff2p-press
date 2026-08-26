@@ -50,7 +50,7 @@ param(
 $InformationPreference = "Continue" # The defaults for printing Information and Debug messages are "SilentlyContinue". You can comment/uncomment these lines to enable/disable printing these messages. Or if one of them is uncommented you can use the respective -Debug or -InformationAction parameters to change their defaults
 #$DebugPreference = "Continue"
 
-. "$PSScriptRoot/sources/ff2ppress-core.ps1"
+. "$PSScriptRoot/sources/ff2ppress-functions.ps1"
 
 $FFmpegArg_JustTrimming = [System.Collections.Generic.List[string]]::new()
 $FFmpegArg_Pass1 = [System.Collections.Generic.List[string]]::new()
