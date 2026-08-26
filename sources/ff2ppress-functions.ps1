@@ -103,3 +103,65 @@ function Merge-FfmpegDuplicateArgs {
     $ArgList.Clear()
     $ArgList.AddRange($MergedArgList)
 }
+
+function Get-VideoBitrate {
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.Generic.List[string]]$Video,
+        [int]$VideoStream,
+        [double]$VideoDuration,
+        [string]$NullDevice
+    )
+
+    $Attempts = 1
+
+    while (-not $VideoBitrate){
+        switch ($Attempts) {
+            1 {
+                try { $VideoBitrate = (ffprobe -v error -select_streams v:$VideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $Video) / 1000 }
+                catch {$VideoBitrate = $null}
+            }
+            2 {
+                [float]$VideoSize_KiB = (ffmpeg -i $Video -map 0:v:$VideoStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
+                $VideoBitrate = ($VideoSize_KiB * 8.192) / $VideoDuration
+            }
+            default {
+                return $null
+            }
+        }
+        $Attempts++
+    }
+
+    return [double]$VideoBitrate
+}
+
+function Get-AudioBitrate {
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.Generic.List[string]]$Video,
+        [int]$AudioStream,
+        [double]$VideoDuration,
+        [string]$NullDevice
+    )
+
+    $Attempts = 1
+
+    while (($AudioBitrate -eq "N/A") -or -not $AudioBitrate){
+        switch ($Attempts) {
+            1 {
+                try { $AudioBitrate = (ffprobe -v error -select_streams a:$AudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $Video) / 1000 }
+                catch {$VideoBitrate = $null}
+            }
+            2 {
+                [float]$AudioSize_KiB = (ffmpeg -i $Video -map 0:a:$AudioStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+                $AudioBitrate = ($AudioSize_KiB * 8.192) / $VideoDuration
+            }
+            default {
+                return $null
+            }
+        }
+        $Attempts++
+    }
+
+    return [double]$AudioBitrate
+}

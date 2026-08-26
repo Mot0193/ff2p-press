@@ -1,5 +1,5 @@
 # Script Parameters
-Here you can find a list of the parameters and flags you can pass to ff2ppress, explainations on what each of them does, and usage examples.
+Here you can find a list of the parameters and flags you can pass to ff2ppress, explanations on what each of them does, and usage examples.
 Some parameters have name aliases. You can either use them by their full name or by the alias. For example, you can use either `-inputvideo` _or_ `-i`.
 
 Most of these parameters have default values. If you’d like, you can change the defaults by editing the `param()` block at the top of `ff2ppress.ps1`.
@@ -73,7 +73,7 @@ Depending on the selected video encoder, the preset defaults to:
 - libaom-av1 - 8
 - libvpx-vp9 - 4
 
-If you want to change the default presets for each codec inside the script, search for the `$EncoderPresetInfo` hashtable and edit the `Default` values.
+If you want to change the default presets for each codec inside the script, search for the `$EncoderPresetInfo` hash table and edit the `Default` values.
 
 #### Usage:
 `-cvpreset veryfast` (this is a valid preset for `libx265` and `libx264`)\
@@ -131,7 +131,7 @@ When using [-trim](Parameters.md#-targetvideotrim-alias--trim), there could be a
 
 Enabling `ForceVideoEncoding` will always re-encode the video, even if the target video bitrate is higher than the input. Encoding may be slow, but will result in a video with no issues.
 
-Disabling `ForceVideoEncoding` will attmept to copy the video and audio codec while just trimming the video. This approach may result in a choppy video, or the start of the video may be black for a few seconds.
+Disabling `ForceVideoEncoding` will attempt to copy the video and audio codec while just trimming the video. This approach may result in a choppy video, or the start of the video may be black for a few seconds.
 
 Just trimming the video may not always result in a met target size, but if you have [RetryEncodingIfTargetNotMet](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) enabled, the script will fall back to normal re-encoding to try to get the video below the target size.
 
@@ -232,29 +232,33 @@ If the input video has multiple video streams ff2ppress can only keep one of the
 `-videostream 7`(WHY would you have a file with this many video streams?? ONE stream is enough already)
 
 ### -RetryEncodingIfTargetNotMet (Alias: -retry) (bool)
-Enable to automatically retry to encode the video with a [lower video bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow-bool) if the video fails to get down to the target size.
+Automatically retry to encode the video if it fails to get down to the target size.
+
+The [-retrylow](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow-bool) parameter determines how or by how much the bitrate should be lowered on each attempt.\
 
 Default is true.
 
 #### Usage:
-`-retry 0` (don't retry if the output file ends up taking more than the target size after one encoding attempt)
+`-retry 0` (disable automatic retry if the video goes over the target size)
 
 ### -RetryEncodingPercentageLowAmount (Alias: -retrylow) (bool)
-When [retrying](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) to re-encode the video, lower the target audio bitrate by this percentage amount.
+When [retrying](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) to re-encode the video, lower the target audio bitrate by this percentage amount.\
+If this value is set to a negative number (e.g -1), the percentage will be selected dynamically based on how much the resulting video overshot the target size.
 
-Default is 2.
+Default is -1. (dynamic mode enabled)
 
 #### Example:
 If the video fails to get down to size after the first encoding attempt, the script will keep retrying while lowering the video bitrate by 2% (the default value for this parameter) each attempt until the video meets the target size.
 
 #### Usage:
 `-retrylow 5` (each subsequent retry lowers the bitrate by 5%)
+`-retrylow -1` (enable dynamic mode)
 
 ## Passing Other FFmpeg Arguments
 
 FF2ppress allows the use of most FFmpeg arguments/flags by simply adding them to the script just like you would to FFmpeg. ANY additional parameters which are passed to this script that PowerShell does not recognize will be instead redirected to FFmpeg itself.
 
-If you wish to achieve something that this script's own parameters do not handle, and you know thers a native ffmpeg parameter which will, you can simply pass that FFmpeg parameter directly to ff2ppress.
+This feature is useful if you wish to achieve something that this script's own parameters does not handle, and you know theres a native FFmpeg parameter can do it.
 
 ### Examples:
 
@@ -263,9 +267,9 @@ To add metadata to the output video, use ffmpeg's -metadata parameter directly t
 ff2ppress.ps1 -i video.mp4 -cv libx264 -s 20 -brlow 5 -metadata comment="yay metadata" -metadata title="the sickest title"
 ```
 
-### Nuances and Limitations:
+### Caveats and Limitations:
 
-- * If you need to chain several options with a comma, for example when you're specifying multiple video filters with -vf (or -filter:v), you may need to put the entire comma-separated options in quotes like so:
+- If you need to chain several options with a comma, for example when you're specifying multiple video filters with -vf (or -filter:v), you may need to put the entire comma-separated options in quotes like so:
 
 ```
 ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
@@ -277,7 +281,7 @@ ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,z
 - Your arguments will NOT be used for the "[just trimming](Parameters.md#-forcevideoencoding-bool)" argument list.
 
 - Even though ff2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use the ffmpeg's video filter parameter under the hood, you can add your own video filters, and they will get merged automatically, so dont worry 'bout it. 
-Though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your super-secret and super-specific use case, you can of course omit using ff2ppress's rescale parameters and instead add your own via `-vf`.
+Though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your super-secret and super-specific use case, you can of course not use ff2ppress's rescale parameters and instead add them via `-vf`.
 
 - You cannot pass an ffmpeg argument that starts with the same letter(s) as any script parameter mentioned in this document. PowerShell will try to match that parameter to a script parameter, but will fail. 
-I haven't found an ffmpeg parameter that will both technically work but can't be passed beacuse of this quirk, but for example, trying to use ffmpeg's `-f` paramater will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`
+I haven't found an ffmpeg parameter that will both technically work but can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`

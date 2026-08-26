@@ -3,8 +3,9 @@
 The default video encoder is libx265 at the "medium" preset. I manually picked the default preset for each encoder, which i considered to be balanced enough for most users, but would still provide good quality.
 
 ## libx265 (hevc/H265)
+This is the default encoder.
 
-H265 is a decent codec overall, but libx265 is pretty slow for what it offers. In most cases, I found that using libsvtav1 is both faster and yields higher quality. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
+H265 is a decent codec overall, but can encode pretty slow for what it offers. In some cases, I found that using libsvtav1 is both faster and yields higher quality. Though, from my testing, libx265 is excellent at actually hitting the target size in one try. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
 
 libx265 supports these presets: (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
 
@@ -25,8 +26,6 @@ The default preset for this script is "p7"
 ## libx264 (avc/H264)
 
 H264 is the least efficient out of these options when it comes to quality, but it has the benefit of encoding pretty fast (though still slower than hardware encoders). It's the most compatible with devices and services, which means it's the best option if you want to guarantee that the video can be played with no issues.
-
-From my testing, libx264 seems to overshoot the target file size quite often. If you’d like you can use [-retry](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) to enable automatic re-encoding if the video fails to reach the target size; [-brlow ](Parameters.md#-bitratepercentagelow-alias--brlow) to automatically lower the target bitrate by a percentage; or pick a lower target size.
 
 libx264 supports the same presets as libx265: (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
 
@@ -75,6 +74,6 @@ libvpx-vp9 supports these "cpu-used" values as "presets": (-8, -7, … 7, 8), wi
 
 # Supported Audio Encoders: libopus / aac
 
-The default audio encoder is libopus at 128k bitrate, or the input video’s audio bitrate if it's lower. From what I read, Opus does great at medium bitrates (64k, 128k, 192k), but at very low bitrates you might want to try AAC. At high bitrates, the difference between codecs is minor.
+The default audio encoder is libopus. From what I read, Opus does great at medium bitrates (64k, 128k, 192k), but at very low bitrates you might want to try AAC. At high bitrates, the difference between codecs is minor.
 
 By default, the script will skip encoding the audio if the bitrate is already below the target, and it will just copy the audio from the input video to the output video. In this case, you may use [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool) to forcefully re-encode the audio to your selected codec, but it will still use the input video’s audio bitrate if it’s lower than the target audio bitrate.

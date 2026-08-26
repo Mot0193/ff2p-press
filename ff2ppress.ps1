@@ -42,7 +42,7 @@ param(
     [Alias("retry")]
     $RetryEncodingIfTargetNotMet = $true,
     [Alias("retrylow")]
-    $RetryEncodingPercentageLowAmount = 2,
+    $RetryEncodingPercentageLowAmount = -1, # negative values enables dynamic mode
 
     [Parameter(ValueFromRemainingArguments)]
     [string[]]$RemainingFFmpegUserArguments
@@ -59,7 +59,7 @@ $FFmpegArg_Pass2 = [System.Collections.Generic.List[string]]::new()
 $PassLogDir = Join-Path ([System.IO.Path]::GetTempPath()) "ff2ppress-$PID"
 New-Item -ItemType Directory -Force -Path $PassLogDir | Out-Null
 $PassLogPrefix = Join-Path $PassLogDir "pass"
-$FFmpegNull = if ($IsWindows) { "NUL" } else { "/dev/null" }
+$NullDevice = if ($IsWindows) { "NUL" } else { "/dev/null" }
 
 $IsFfmpegAvailable = [bool] (Get-Command -ErrorAction Ignore -Type Application ffmpeg)
 if (-not $IsFfmpegAvailable){
@@ -82,8 +82,9 @@ if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $PSBoundParameters
 }
 
 # Probe duration
-$GetVideoDurationAttempts = 1
+$GetVideoDurationAttempts = 0
 while ($null -eq $StartingVideoDuration_sec){
+    $GetVideoDurationAttempts++
     switch ($GetVideoDurationAttempts) {
         1 {
             try { [double]$StartingVideoDuration_sec = ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $InputVideo }
@@ -111,7 +112,6 @@ while ($null -eq $StartingVideoDuration_sec){
             exit 1
         }
     }
-    $GetVideoDurationAttempts++
 }
 Write-Debug "Got the video stream duration in $GetVideoDurationAttempts attempt(s)."
 
@@ -125,26 +125,11 @@ else {
 }
 
 # Probe audio bitrate
-$GetAudioBitrateAttempts = 1
 $AudioStreamsExist = [bool](ffprobe -v error -select_streams a -show_entries stream=index -of csv $InputVideo)
 if ($AudioStreamsExist){
-    :loop while ($null -eq $StartingAudioBitrate_kbps){
-        switch ($GetAudioBitrateAttempts) {
-            1 {
-                try { $StartingAudioBitrate_kbps = (ffprobe -v error -select_streams a:$InputAudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000 }
-                catch { $StartingAudioBitrate_kbps = $null }
-
-            }
-            2 {
-                [float]$StartingAudioSize_KiB = (ffmpeg -i $InputVideo -map 0:a:$InputAudioStream -c copy -f null $FFmpegNull 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
-                $StartingAudioBitrate_kbps = ($StartingAudioSize_KiB * 8.192) / $StartingVideoDuration_sec
-            }
-            default {
-                Write-Warning "Could not get the audio bitrate of the input video."
-                break loop
-            }
-        }
-        $GetAudioBitrateAttempts++
+    $StartingAudioBitrate_kbps = Get-AudioBitrate $InputVideo $InputAudioStream $StartingVideoDuration_sec $NullDevice
+    if (-not $StartingAudioBitrate_kbps){
+        Write-Warning "Could not get the audio bitrate of the input video."
     }
 }
 else {
@@ -152,35 +137,23 @@ else {
 }
 
 # Probe video bitrate
-$GetVideoBitrateAttempts = 1
 $VideoStreamsExist = [bool](ffprobe -v error -select_streams v -show_entries stream=index -of csv $InputVideo)
 if ($VideoStreamsExist){
-    :loop while (($StartingVideoBitrate_kbps -eq "N/A") -or -not($StartingVideoBitrate_kbps) -and $VideoStreamsExist ){
-        switch ($GetVideoBitrateAttempts) {
-            1 {
-                $StartingVideoBitrate_kbps = (ffprobe -v error -select_streams v:$InputVideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $InputVideo) / 1000
-            }
-            2 {
-                [float]$StartingVideoSize_KiB = (ffmpeg -i $InputVideo -map 0:v:$InputVideoStream -c copy -f null $FFmpegNull 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
-                $StartingVideoBitrate_kbps = ($StartingVideoSize_KiB * 8.192) / $StartingVideoDuration_sec
-            }
-            default {
-                Write-Warning "Could not get the video bitrate of the input video."
-                break loop
-            }
-        }
-        $GetVideoBitrateAttempts++
+    $StartingVideoBitrate_kbps = Get-VideoBitrate $InputVideo $InputVideoStream $StartingVideoDuration_sec $NullDevice
+    if (-not $StartingVideoBitrate_kbps){
+        Write-Warning "Could not get the video bitrate of the input video."
     }
-} else {
+} 
+else {
     Write-Error "Input file has no video streams!"
     exit 1
 }
 
 $TargetAudioEncoder = $SelectedAudioEncoder
-if ($StartingAudioBitrate_kbps -and ($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps)) {
+if ($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) {
     if (-not ($StartingAudioBitrate_kbps -eq 0)){
         if (-not $ForceAudioEncoding) {
-            Write-Warning "Copying audio, wont transcode. The bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps)."
+            Write-Warning "The input audio bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps). Copying audio, wont transcode."
             $TargetAudioEncoder = "copy"
         }
         else {
@@ -442,7 +415,7 @@ while (1){
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass2 @("-vf", "-af")
         }
 
-        $FFmpegArg_Pass1.AddRange( [string[]]@("-an", "-f", "null", $FFmpegNull) )
+        $FFmpegArg_Pass1.AddRange( [string[]]@("-an", "-f", "null", $NullDevice) )
         $FFmpegArg_Pass2.Add($FinalOutputFile)
     }
 
@@ -469,28 +442,40 @@ while (1){
     $EncodingAttempts++
 
     try {
-        $MiBresultsize = (Get-Item -LiteralPath $FinalOutputFile -ErrorAction Stop).Length / 1MB
+        $ResultingVideoSize_MiB = (Get-Item -LiteralPath $FinalOutputFile -ErrorAction Stop).Length / 1MB
     }
     catch {
         Write-Error "Output file does not exist. An FFmpeg error may have occured."
         exit 1
     }
 
-    if (($MiBresultsize -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
+    if (($ResultingVideoSize_MiB -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
-            Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size." -f $MiBresultsize)
+            $EndTime = Get-Date
+            $ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeAttemptStartTime).TotalSeconds, 2))
+
+            Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size." -f $ResultingVideoSize_MiB)
 
             if ($JustTrimmingEnabled){
                 Write-Warning ("Just trimming the video failed to get it down to size. Falling back to re-encoding...")
                 $FancyRename = ($PSBoundParameters['FancyRename'] -eq $false) ? $PSBoundParameters['FancyRename'] : $true # if FancyRename was bound and set to false, keep it that way. if it wasnt bound or its true enable it since it was disabled automatically
             }
             else {
-                Write-Host "Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
-                $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
+                if ($RetryEncodingPercentageLowAmount -lt 0){                    
+                    # "dynamic" retry bitrate-lowering percentage
+                    # this calculates the percentage difference between the target bitrate and resulting bitrate, and rounds it up in 0.5 steps
+
+                    $CurrentRetryEncodingPercentageLowAmount = ([math]::Abs($TargetVideoSize_MiB - $ResultingVideoSize_MiB) / (($TargetVideoSize_MiB + $ResultingVideoSize_MiB) / 2)) * 100
+                    $CurrentRetryEncodingPercentageLowAmount = [Math]::Ceiling($CurrentRetryEncodingPercentageLowAmount / 0.5) * 0.5
+
+                    Write-Host ("Retrying to encode with {0:F2}% lower video bitrate (dynamic)..." -f $CurrentRetryEncodingPercentageLowAmount)
+                }
+                else {
+                    $CurrentRetryEncodingPercentageLowAmount = $CurrentRetryEncodingPercentageLowAmount + $RetryEncodingPercentageLowAmount
+                    Write-Host "Retrying to encode with $RetryEncodingPercentageLowAmount% lower video bitrate..."
+                }
                 $TargetVideoBitrate_kbps = $TargetVideoBitrate_kbps * (1 - ($CurrentRetryEncodingPercentageLowAmount / 100))
-            }            
-            $EndTime = Get-Date
-            $ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeAttemptStartTime).TotalSeconds, 2))
+            }
 
             Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
 
@@ -498,7 +483,7 @@ while (1){
             Write-Host "=== === Attempt $($EncodingAttempts+1) === ==="
         }
         else {
-            Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size. Automatic encoding retry is disabled! Use -retry if you want to enable it." -f $MiBresultsize)
+            Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size. Automatic encoding retry is disabled! Use -retry if you want to enable it." -f $ResultingVideoSize_MiB)
             break
         }
     }

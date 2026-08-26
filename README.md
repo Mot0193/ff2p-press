@@ -10,7 +10,10 @@ FF2ppress's main feature is customizability and control, allowing you to change 
 * Specifying the [audio or video stream](/docs/Parameters.md#-inputaudiostream-alias--audiostream) of a multi-stream input file;
 * Being able to pass most [FFmpeg arguments directly](/docs/Parameters.md#passing-other-ffmpeg-arguments), which opens up the majority of FFmpeg’s functionality;
 
-This customizability tries not to sacrifice ease of use: The script comes with hand-picked defaults; It tries to automatically deal with most scenarios and edge cases; And it comes with parameters that simplify some of the more common FFmpeg use cases (such as [downscaling the resolution](/docs/Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w), or trimming the video).
+This customizability tries not to sacrifice ease of use:
+* The script comes with hand-picked defaults, which makes it easy to start using it, as it only requires the [input video parameter](/docs/Parameters.md#-inputvideo-alias--i)
+* It tries to automatically deal with most scenarios and edge cases
+* It comes with parameters that simplify some of the more common FFmpeg use cases (such as [downscaling the resolution](/docs/Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w), or trimming the video).
 
 # Installation & Dependencies
 
@@ -33,6 +36,7 @@ If you get this error when you try to run ff2ppress.ps1: `The file ff2ppress.ps1
 dir -r C:\path\to\folder\ff2p-press\*.ps1 | Unblock-File
 ```
 You may add ff2ppress.ps1 to your PATH variable if you'd like.
+
 ## Via Nix
 
 FF2ppress contains a Nix flake, which makes installation easy on systems that use [Nix](https://nixos.org/learn/).
