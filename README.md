@@ -13,7 +13,7 @@ FF2ppress's main feature is customizability and control, allowing you to change 
 This customizability tries not to sacrifice ease of use:
 * The script comes with hand-picked defaults, which makes it easy to start using it, as it only requires the [input video parameter](/docs/Parameters.md#-inputvideo-alias--i)
 * It tries to automatically deal with most scenarios and edge cases
-* It comes with parameters that simplify some of the more common FFmpeg use cases (such as [downscaling the resolution](/docs/Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w), or trimming the video).
+* It comes with parameters that simplify some FFmpeg use cases (such as [downscaling the resolution](/docs/Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w)).
 
 # Installation & Dependencies
 

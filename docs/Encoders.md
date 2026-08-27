@@ -5,7 +5,7 @@ The default video encoder is libx265 at the "medium" preset. I manually picked t
 ## libx265 (hevc/H265)
 This is the default encoder.
 
-H265 is a decent codec overall, but can encode pretty slow for what it offers. In some cases, I found that using libsvtav1 is both faster and yields higher quality. Though, from my testing, libx265 is excellent at actually hitting the target size in one try. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
+H265 is a decent codec overall, but can encode pretty slowly for what it offers. In some cases, I found that using libsvtav1 is both faster and yields higher quality. Though, from my testing, libx265 is excellent at actually hitting the target size in one try. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
 
 libx265 supports these presets: (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
 
@@ -20,8 +20,8 @@ hevc_nvenc’s main presets are: p1, p2, p3, … p7. Higher values provide highe
 The default preset for this script is "p7"
 
 > [!NOTE]
-> NVENC handles 2-pass encoding differently from software encoders. It performs both passes in a single run, so ff2ppress will go straight to the "final pass" instead of showing a separate first pass.
-> Unlike the software presets which use VBR (variable bitrate), NVENC is set to use CBR (constant bitrate) instead, since it often has a hard time hitting video target with VBR.
+> Nvenc encoders don't really have a traditional 2-pass mode like how the other software encoders do, so the ff2ppress will skip the 1st pass when an nvenc encoder is selected. While they do have the ["-multipass"](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/nvenc-video-encoder-api-prog-guide/index.html#multi-pass-frame-encoding) parameter, which the script automatically sets to "fullres", it doesn't do the same thing as a proper 2-pass mode.
+> Because of this, nvenc is set to use CBR (constant bitrate), since it often has a hard time hitting video target with VBR.
 
 ## libx264 (avc/H264)
 

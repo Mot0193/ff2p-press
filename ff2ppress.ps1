@@ -184,7 +184,7 @@ if (-not($TargetVideoBitrate_kbps)){
             if (-not $PrioritizeAudioBitrate) {
                 Write-Warning "Audio size would be over 20% of the target size. Re-calculating audio bitrate so audio will take up 20% of the file..."
                 # In normal use cases this will hopefully never happen, but with very long videos that are set to very low target sizes this can become an issue.
-                $TargetAudioEncoder = $SelectedAudioEncoder # dont forget to also re-select the codec. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the codec to "copy") AND the audio will trigger this 20% check, we need to set the codec to the selected one once again
+                $TargetAudioEncoder = $SelectedAudioEncoder # dont forget to also re-select the audio encoder. This gets set once earlier in the code, but just in case the input video audio is both below the target (which will set the encoder to "copy") AND the audio will trigger this 20% check, we need to set the encoder to the selected one once again
                 $TargetAudioBitrate_kbps = 0.2 * $TargetVideoSize_kbit / $TargetVideoDuration_sec
                 $TargetAudioSize_kbit = $TargetAudioBitrate_kbps * $TargetVideoDuration_sec
             }
@@ -205,9 +205,26 @@ if (-not($TargetVideoBitrate_kbps)){
 }
 
 if ($TargetVideoBitrate_kbps -le 0) {
-    Write-Error "Target bitrate is not not set or not higher than 0."
+    Write-Error "Target bitrate is not set or its not higher than 0."
     exit 1
 }
+
+$EncoderPresetInfo = @{
+    "libx265"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "medium"; EncParamsCompatible = $true }
+    "libx264"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "slower"; EncParamsCompatible = $true }
+    "hevc_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+    "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+    "libaom-av1" = @{ Valid = 0 .. 9; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
+    "libsvtav1"  = @{ Valid = 0 .. 13; Default = "5"; EncParamsCompatible = $true; DefaultExtraArgs = @("-svtav1-params", "lookahead=42")}
+    "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1")}
+}
+$EncoderInfo = $EncoderPresetInfo[$VideoEncoder]
+
+$AudioEncoders = @(
+    "libopus",
+    "aac",
+    "copy"
+)
 
 Write-Information "[FF2PPRESS Video Info]"
 Write-Information ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f $StartingVideoDuration_sec, $StartingVideoSize_MiB, $StartingVideoBitrate_kbps)
@@ -226,17 +243,6 @@ while (1){
     $FFmpegArg_Pass1.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
     $FFmpegArg_Pass2.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
 
-    $EncoderPresetInfo = @{
-        "libx265"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "medium"; EncParamsCompatible = $true }
-        "libx264"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "slower"; EncParamsCompatible = $true }
-        "hevc_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true }
-        "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true }
-        "libaom-av1" = @{ Valid = 0..9  | ForEach-Object { "$_" }; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true }
-        "libsvtav1"  = @{ Valid = 0..13 | ForEach-Object { "$_" }; Default = "5"; EncParamsCompatible = $true }
-        "libvpx-vp9" = @{ Valid = 0..5  | ForEach-Object { "$_" }; Default = "4"; UsesCpuUsed = $true }
-    }
-    $EncoderInfo = $EncoderPresetInfo[$VideoEncoder]
-
     if ($EncoderPresetInfo.ContainsKey($VideoEncoder)) {
         if ($VideoEncoderPreset -notin $EncoderInfo.Valid) {
             if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')) {
@@ -246,17 +252,7 @@ while (1){
         }
     }
     else {
-        Write-Error "Unknown/Unavailable video encoders: $VideoEncoder. Check the available encoders in readme."
-        exit 1
-    }
-
-    $AudioEncoders = @(
-        "libopus",
-        "aac",
-        "copy"
-    )
-    if (-not $AudioEncoders.Contains($TargetAudioEncoder)){
-        Write-Error "Unknown/Unavailable audio encoders: $TargetAudioEncoder. Check the available encoders in readme."
+        Write-Error "Unknown/Unavailable video encoder: $VideoEncoder. Check the available encoders in readme."
         exit 1
     }
    
@@ -272,7 +268,6 @@ while (1){
         }
     }
     else { $JustTrimmingEnabled = $false }
-
 
     if ($FancyRename) {
         if (-not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) { 
@@ -323,27 +318,34 @@ while (1){
 
         if ($EncoderInfo.ContainsKey("UsesCpuUsed")) {
             # libvpx-vp9 and libaom-av1 uses the -cpu-used parameter instead of -preset
-            $FFmpegArg_Pass1.AddRange( [string[]]@("-cpu-used", $VideoEncoderPreset, "-row-mt", "1") )
-            $FFmpegArg_Pass2.AddRange( [string[]]@("-cpu-used", $VideoEncoderPreset, "-row-mt", "1") )
+            $FFmpegArg_Pass1.AddRange( [string[]]@("-cpu-used", $VideoEncoderPreset ) )
+            $FFmpegArg_Pass2.AddRange( [string[]]@("-cpu-used", $VideoEncoderPreset ) )
         }
         else {
             $FFmpegArg_Pass1.AddRange( [string[]]@("-preset", $VideoEncoderPreset) )
             $FFmpegArg_Pass2.AddRange( [string[]]@("-preset", $VideoEncoderPreset) )
         }
 
-        if ($TargetAudioEncoder -in "libopus", "aac", "copy") {
+        if ($AudioEncoders.Contains($TargetAudioEncoder)) {
             $FFmpegArg_Pass1.Add("-an") # discard audio on the 1st pass
-            $FFmpegArg_Pass2.AddRange( [string[]]@("-c:a", $TargetAudioEncoder, "-b:a", "$TargetAudioBitrate_kbps`k") )
+
+            if ($TargetAudioBitrate_kbps -eq 0){
+                $FFmpegArg_Pass2.Add("-an")
+                Write-Host "Target Audio Bitrate is 0. Audio stream will be discared."
+            }
+            else {
+                $FFmpegArg_Pass2.AddRange( [string[]]@("-c:a", $TargetAudioEncoder, "-b:a", "$TargetAudioBitrate_kbps`k") )
+            }
         }
         else {
             Write-Error "Unknown/Unavailable audio encoder. Check the available encoders in readme."
             exit 1
         }
         
-        if ($EncoderInfo.ContainsKey("IsNvenc")){
-            # enable CBR and fullres multipass for nvenc encoders
-            $FFmpegArg_Pass1.AddRange( [string[]]@("-rc", "cbr", "-multipass", "fullres") )
-            $FFmpegArg_Pass2.AddRange( [string[]]@("-rc", "cbr", "-multipass", "fullres") )
+        if ($EncoderInfo.ContainsKey("DefaultExtraArgs")){
+            # add extra arguments if they exist in the EncoderPresetInfo table. For example, for libaom-av1 and libvpx-vp9, enable -row-mt; For nvenc encoders enable CBR and multipass
+            $FFmpegArg_Pass1.AddRange([string[]]$EncoderInfo.DefaultExtraArgs)
+            $FFmpegArg_Pass2.AddRange([string[]]$EncoderInfo.DefaultExtraArgs)
         }
 
         $FFmpegArg_Pass1.AddRange( [string[]]@("-map", "0:v:$InputVideoStream") )
@@ -368,11 +370,14 @@ while (1){
 
                 $FFmpegArg_Pass1.AddRange( [string[]]@("-$codecparam-params", "$EncoderParameters") )
                 $FFmpegArg_Pass2.AddRange( [string[]]@("-$codecparam-params", "$EncoderParameters") )
+
+                # in case there are any defined DefaultExtraArgs encoder parameters in EncoderPresetInfo, merge user EncoderParameters too
+                Merge-FfmpegDuplicateArgs $FFmpegArg_Pass1 @("-svtav1-params", "-aom-params", "-x264-params", "-x265-params") ":"
+                Merge-FfmpegDuplicateArgs $FFmpegArg_Pass2 @("-svtav1-params", "-aom-params", "-x264-params", "-x265-params") ":"
             }
             else {
                 Write-Warning "The video encoder $VideoEncoder does not support parameters via -params. Encoder parameters will be omitted."
             }
-
         }
 
         if (($TargetVideoWidth -ne -1) -or ($TargetVideoHeight -ne -1)) {
@@ -388,11 +393,6 @@ while (1){
                 $FFmpegArg_Pass1.AddRange( [string[]]@("-to", $TargetVideoTrimEnd) )
                 $FFmpegArg_Pass2.AddRange( [string[]]@("-to", $TargetVideoTrimEnd) )
             }
-        }
-
-        if ($TargetAudioBitrate_kbps -eq 0){
-            $FFmpegArg_Pass2.Add("-an")
-            Write-Host "Target Audio Bitrate is 0. Audio streams will be discared."
         }
 
         if ($RemainingFFmpegUserArguments.Count -gt 0){
@@ -415,7 +415,7 @@ while (1){
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass2 @("-vf", "-af")
         }
 
-        $FFmpegArg_Pass1.AddRange( [string[]]@("-an", "-f", "null", $NullDevice) )
+        $FFmpegArg_Pass1.AddRange( [string[]]@("-f", "null", $NullDevice) )
         $FFmpegArg_Pass2.Add($FinalOutputFile)
     }
 

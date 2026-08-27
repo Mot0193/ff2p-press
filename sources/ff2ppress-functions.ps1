@@ -64,7 +64,8 @@ function Merge-FfmpegDuplicateArgs {
         [Parameter(Mandatory)]
         [System.Collections.Generic.List[string]]$ArgList,
         [Parameter(Mandatory)]
-        [string[]]$MergableArgs
+        [string[]]$MergableArgs,
+        [string[]]$Separator = ","
     )
 
     $MergedArgList = [System.Collections.Generic.List[string]]::new()
@@ -90,7 +91,7 @@ function Merge-FfmpegDuplicateArgs {
         if ($MergableArgs -contains $ArgList[$i]){
             if (-not $EmittedArg.ContainsKey($ArgList[$i])) {
                 $MergedArgList.Add($ArgList[$i])
-                $MergedArgList.Add(($FoundMergableArgs[$ArgList[$i]] -join ","))
+                $MergedArgList.Add(($FoundMergableArgs[$ArgList[$i]] -join "$Separator"))
                 $EmittedArg[$ArgList[$i]] = $true
             }
             $i++
@@ -150,7 +151,7 @@ function Get-AudioBitrate {
         switch ($Attempts) {
             1 {
                 try { $AudioBitrate = (ffprobe -v error -select_streams a:$AudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $Video) / 1000 }
-                catch {$VideoBitrate = $null}
+                catch {$AudioBitrate = $null}
             }
             2 {
                 [float]$AudioSize_KiB = (ffmpeg -i $Video -map 0:a:$AudioStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
