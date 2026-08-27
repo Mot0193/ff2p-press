@@ -403,13 +403,13 @@ while (1){
             $FFmpegArg_Pass1.AddRange($FFmpegArgs_Remaining)
             $FFmpegArg_Pass2.AddRange($FFmpegArgs_Remaining)
 
-            $FFmpegMergableAliasMap = @{
+            $FFmpegMergeableAliasMap = @{
                 '-filter:v'   = '-vf'
                 '-filter:a'   = '-af'
             }
 
-            Convert-MergableAliases $FFmpegArg_Pass1 $FFmpegMergableAliasMap
-            Convert-MergableAliases $FFmpegArg_Pass2 $FFmpegMergableAliasMap
+            Convert-MergeableAliases $FFmpegArg_Pass1 $FFmpegMergeableAliasMap
+            Convert-MergeableAliases $FFmpegArg_Pass2 $FFmpegMergeableAliasMap
 
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass1 @("-vf", "-af")
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass2 @("-vf", "-af")

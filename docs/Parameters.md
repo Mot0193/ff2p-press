@@ -123,8 +123,8 @@ The video bitrate will be calculated correctly to account for the changed video 
 #### Usage:
 `-trim 0-10` (keep the first 10 seconds of the video, cut out the rest)\
 `-trim 5-1:0` (keep the video from the 5th second to the 1st minute, cut out the rest) (you can combine timestamps with no issue)\
-`-trim 10-end (cut the first 10 seconds of the video)\
-`-trim 0:1:30.5-end (cut out the first 1 minute, 30 seconds and 0.5 seconds)
+`-trim 10-end` (cut the first 10 seconds of the video)\
+`-trim 0:1:30.5-end` (cut out the first 1 minute, 30 seconds and 0.5 seconds)
 
 ### -ForceVideoEncoding (bool)
 When using [-trim](Parameters.md#-targetvideotrim-alias--trim), there could be a chance that the target video bitrate will end up being higher than the starting video target. This means trimming the video will theoretically be enough to get under the target file size without having to re-encode the video.
@@ -200,8 +200,9 @@ Enabling this does NOT prevent the script from picking the input video's audio b
 Default is false.
 
 #### Example:
-After the video bitrate has been calculated, the script checks if the audio would take up more than 20% of the output video file. If it would, the script automatically recalculates the audio bitrate so it takes at most 20% of the file. This prevents the audio bitrate from leaving proportionally less bitrate for the video stream, or worse, the audio bitrate taking up more than 100% of the file.
-This specific issue tends to happen with long videos set to very small target sizes.
+After the video bitrate has been calculated, the script checks if the audio would take up more than 20% of the output video file. If it would, the script automatically recalculates the audio bitrate so it takes at most 20% of the file. This prevents the audio bitrate from leaving proportionally less bitrate for the video stream, or worse, the audio bitrate taking up more than 100% of the file. This specific issue tends to happen with long videos set to very small target sizes.
+
+Use PrioritizeAudioBitrate if you wish to make the script use your selected audio bitrate instead of letting the script lower the bitrate to 20% of the file. The script will still check if the audio would take 100% or more of the file target size.
 
 #### Usage:
 `-PrioritizeAudioBitrate 1` (if the edge case mentioned above gets triggered, audio will not be recalculated to fit 20% of the file)
@@ -254,6 +255,10 @@ If the video fails to get down to size after the first encoding attempt, the scr
 `-retrylow 5` (each subsequent retry lowers the bitrate by 5%)
 `-retrylow -1` (enable dynamic mode)
 
+## Debug Mode (see the ffmpeg argument list before compressing)
+
+You can use PowerShell's `-debug` argument when running ff2ppress to see the full ffmpeg argument lists before running ffmpeg.
+
 ## Passing Other FFmpeg Arguments
 
 FF2ppress allows the use of most FFmpeg arguments/flags by simply adding them to the script just like you would to FFmpeg. ANY additional parameters which are passed to this script that PowerShell does not recognize will be instead redirected to FFmpeg itself.
@@ -280,8 +285,7 @@ ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,z
 
 - Your arguments will NOT be used for the "[just trimming](Parameters.md#-forcevideoencoding-bool)" argument list.
 
-- Even though ff2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use the ffmpeg's video filter parameter under the hood, you can add your own video filters, and they will get merged automatically, so dont worry 'bout it. 
-Though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your super-secret and super-specific use case, you can of course not use ff2ppress's rescale parameters and instead add them via `-vf`.
+- FF2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use ffmpeg's video filter parameter under the hood. You can add your own video filters just fine, and the script will merge these filters for you, though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your super-secret and super-specific use case, you can of course not use ff2ppress's rescale parameters and instead add them via `-vf`.
 
 - You cannot pass an ffmpeg argument that starts with the same letter(s) as any script parameter mentioned in this document. PowerShell will try to match that parameter to a script parameter, but will fail. 
 I haven't found an ffmpeg parameter that will both technically work but can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`

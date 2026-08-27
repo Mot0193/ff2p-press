@@ -44,7 +44,7 @@ function Repair-SplitColonTokens {
     return $fixed.ToArray()
 }
 
-function Convert-MergableAliases {
+function Convert-MergeableAliases {
     param(
         [Parameter(Mandatory)]
         [System.Collections.Generic.List[string]]$ArgList,
@@ -64,23 +64,23 @@ function Merge-FfmpegDuplicateArgs {
         [Parameter(Mandatory)]
         [System.Collections.Generic.List[string]]$ArgList,
         [Parameter(Mandatory)]
-        [string[]]$MergableArgs,
+        [string[]]$MergeableArgs,
         [string[]]$Separator = ","
     )
 
     $MergedArgList = [System.Collections.Generic.List[string]]::new()
 
-    $FoundMergableArgs = @{}
+    $FoundMergeableArgs = @{}
 
     for ($i = 0; $i -lt $ArgList.Count; $i++) {
 
-        if ($MergableArgs -contains $ArgList[$i]){
+        if ($MergeableArgs -contains $ArgList[$i]){
 
-            if ($FoundMergableArgs.ContainsKey($ArgList[$i])){
-                $FoundMergableArgs[$ArgList[$i]] += $ArgList[$i+1]
+            if ($FoundMergeableArgs.ContainsKey($ArgList[$i])){
+                $FoundMergeableArgs[$ArgList[$i]] += $ArgList[$i+1]
             }
             else {
-                $FoundMergableArgs.Add($ArgList[$i], @($ArgList[$i+1]))
+                $FoundMergeableArgs.Add($ArgList[$i], @($ArgList[$i+1]))
             }
         }
     }
@@ -88,10 +88,10 @@ function Merge-FfmpegDuplicateArgs {
     $EmittedArg = @{}
     for ($i = 0; $i -lt $ArgList.Count; $i++) {
 
-        if ($MergableArgs -contains $ArgList[$i]){
+        if ($MergeableArgs -contains $ArgList[$i]){
             if (-not $EmittedArg.ContainsKey($ArgList[$i])) {
                 $MergedArgList.Add($ArgList[$i])
-                $MergedArgList.Add(($FoundMergableArgs[$ArgList[$i]] -join "$Separator"))
+                $MergedArgList.Add(($FoundMergeableArgs[$ArgList[$i]] -join "$Separator"))
                 $EmittedArg[$ArgList[$i]] = $true
             }
             $i++
