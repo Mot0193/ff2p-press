@@ -15,7 +15,7 @@ The default preset for this script is "medium"
 
 In general, hardware-accelerated encoders can provide worse quality than their software (CPU) versions (in this case, compared to libx265), but they are A LOT faster even at the highest quality/preset settings.
 
-hevc_nvenc’s main presets are: p1, p2, p3, … p7. Higher values provide higher quality. To see all presets, run `ffmpeg -h encoder=hevc_nvenc`
+hevc_nvenc’s main presets are: p1, p2, p3, … p7. Higher values provide higher quality.
 
 The default preset for this script is "p7"
 

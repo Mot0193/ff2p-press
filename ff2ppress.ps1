@@ -63,7 +63,7 @@ $NullDevice = if ($IsWindows) { "NUL" } else { "/dev/null" }
 
 $IsFfmpegAvailable = [bool] (Get-Command -ErrorAction Ignore -Type Application ffmpeg)
 if (-not $IsFfmpegAvailable){
-    Write-Error "ffmpeg is not installed or not in PATH."
+    Write-Error "Ffmpeg is not installed or its not added to PATH."
     exit 1
 }
 
@@ -118,7 +118,13 @@ Write-Debug "Got the video stream duration in $GetVideoDurationAttempts attempt(
 # Calculate the duration of the video
 if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
     $TargetVideoTrimStart, $TargetVideoTrimEnd = $TargetVideoTrim.Split("-")
-    [double]$TargetVideoDuration_sec = (ConvertTo-Seconds $TargetVideoTrimEnd) - (ConvertTo-Seconds $TargetVideoTrimStart)
+    try {
+        [double]$TargetVideoDuration_sec = (ConvertTo-Seconds $TargetVideoTrimEnd) - (ConvertTo-Seconds $TargetVideoTrimStart)
+    }
+    catch {
+        Write-Error "Could not calculate the trimmed video duration. Check if trim timestamps are formatted correctly."
+        exit 1
+    }
 }
 else {
     $TargetVideoDuration_sec = $StartingVideoDuration_sec
@@ -190,7 +196,7 @@ if (-not($TargetVideoBitrate_kbps)){
             }
             else {
                 Write-Warning "Audio will be over 20% of the target size because you enabled PrioritizeAudioBitrate."
-                if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -gt 1) {
+                if (($TargetAudioSize_kbit / $TargetVideoSize_kbit) -ge 1) {
                     Write-Error "Audio would take up more than the entire video target. Either disable PrioritizeAudioBitrate or lower the audio bitrate!"
                     exit 1
                 }
@@ -214,7 +220,7 @@ $EncoderPresetInfo = @{
     "libx264"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "slower"; EncParamsCompatible = $true }
     "hevc_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
     "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
-    "libaom-av1" = @{ Valid = 0 .. 9; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
+    "libaom-av1" = @{ Valid = 0 .. 8; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
     "libsvtav1"  = @{ Valid = 0 .. 13; Default = "5"; EncParamsCompatible = $true; DefaultExtraArgs = @("-svtav1-params", "lookahead=42")}
     "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1")}
 }
@@ -255,8 +261,9 @@ while (1){
         Write-Error "Unknown/Unavailable video encoder: $VideoEncoder. Check the available encoders in readme."
         exit 1
     }
-   
+    
     if (($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps) -and ($EncodingAttempts -lt 1) -and $PSBoundParameters.ContainsKey('TargetVideoTrim')){
+        # the target video bitrate being higher than the input video's bitrate isnt a very good decider for the just trimming mode. Ill need to account for the audio size too, but for now this works
         if ($ForceVideoEncoding -eq 0){
             Write-Warning("Target video bitrate is higher than the starting bitrate. Attempting to just trim the video, but this may result in a black video for the first few seconds. You may enable ForceVideoEncoding to re-encode the video even if the target bitrate is higher")
             $JustTrimmingEnabled = $true
@@ -396,6 +403,8 @@ while (1){
         }
 
         if ($RemainingFFmpegUserArguments.Count -gt 0){
+            # powershell's parser splits arguments containing ":". For example when passing "-filter:v", it may results in 2 tokens: "-filter:", "v"
+            # Repair-SplitColonTokens repairs split tokens like these
             [System.Collections.Generic.List[string]]$FFmpegArgs_Remaining =  Repair-SplitColonTokens $RemainingFFmpegUserArguments
             
             Write-Information "Found remaining ffmpeg arguments: $FFmpegArgs_Remaining"
@@ -407,10 +416,13 @@ while (1){
                 '-filter:v'   = '-vf'
                 '-filter:a'   = '-af'
             }
-
+            
+            # Convert-MergeableAliases "normalizes" mergable arguments, so Merge-FfmpegDuplicateArgs wont have to worry about aliases (e.g "-filter:v" AND "-vf")
             Convert-MergeableAliases $FFmpegArg_Pass1 $FFmpegMergeableAliasMap
             Convert-MergeableAliases $FFmpegArg_Pass2 $FFmpegMergeableAliasMap
 
+
+            # merge video and audio filters. In this case the script's own "scale" video filters will get merged with any user-selected filters
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass1 @("-vf", "-af")
             Merge-FfmpegDuplicateArgs $FFmpegArg_Pass2 @("-vf", "-af")
         }
@@ -420,8 +432,8 @@ while (1){
     }
 
     if ($JustTrimmingEnabled) { Write-Debug "Final JustTrimming Arg List: $FFmpegArg_JustTrimming" }
-    Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1"
-    Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2"
+    if (-not $JustTrimmingEnabled) { Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1" }
+    if (-not $JustTrimmingEnabled) { Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2" }
     if ($DebugPreference -eq 'Continue'){ Pause } # if debug is enabled, pause the script so you can see the debug messages before starting to encode
 
     $EncodeAttemptStartTime = Get-Date

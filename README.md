@@ -19,8 +19,8 @@ This customizability tries not to sacrifice ease of use:
 
 ## On Windows
 
-On Windows, make sure PowerShell and FFmpeg are installed and updated.
-Your FFmpeg version should be above 8.1, and it should contain all the script-compatible video encoders that you wish to use. You can install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
+On Windows, make sure PowerShell and FFmpeg (with FFprobe) are installed and updated.
+Your FFmpeg version should be above 8.1, and it should contain all the script-compatible [encoders](/docs/Encoders.md) that you wish to use. You can install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
 ```
 winget install Microsoft.PowerShell
 winget install ffmpeg
