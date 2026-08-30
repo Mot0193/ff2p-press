@@ -463,6 +463,12 @@ while (1){
         exit 1
     }
 
+    if ($ResultingVideoSize_MiB -eq 0){
+        Write-Error "The output file's size is 0. An FFmpeg error may have occured."
+        Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
+        exit 1
+    }
+
     if (($ResultingVideoSize_MiB -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
             $EndTime = Get-Date

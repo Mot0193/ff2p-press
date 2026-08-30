@@ -2,7 +2,7 @@ Here you'll find a list of FFmpeg encoders that FF2ppress supports, as well as t
 
 The default video encoder is `libx265` with the `medium` preset, and the default audio encoder is `libopus` at `128`k bitrate. See the relevant [Parameters](Parameters.md) for changing encoders, presets, and the audio bitrate.
 
-Encoders and video formats are complicated, there's no easy answers for questions such as "Whats the best encoder". That question depends on your use case, your hardware, and your own subjective judgment when it comes to quality and encode times. I reccomend trying out different encoders and their presets to come up with your own conclusion. 
+Encoders and video formats are complicated, there's no easy answers for questions such as "Whats the best encoder". That question depends on your use case, your hardware, and your own subjective judgment when it comes to quality and encode times. I recommend trying out different encoders and their presets to come up with your own conclusion. 
 
 # Software Video Encoders
 Software encoders use the CPU for encoding, which makes them slower than hardware encoders, but they have a lot more room for quality, tweaking settings, and dont require dedicated hardware (such as a GPU with hardware encoding). They are also better suited for targeting specific file sizes, which is the primary goal of this script.
