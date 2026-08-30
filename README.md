@@ -42,11 +42,14 @@ You may add ff2ppress.ps1 to your PATH variable if you'd like.
 FF2ppress contains a Nix flake, which makes installation easy on systems that use [Nix](https://nixos.org/learn/).
 
 Run or install with Nix:
-```
+```bash
 # requires extra-experimental-settings "nix-command flakes" to be configured
+
 nix run github:mot0193/ff2p-press -- -i {file}  # run ff2p-press
 nix shell github:mot0193/ff2p-press             # open a shell with ff2p-press inside
-nix profile install github:mot0193/ff2p-press   # install ff2p-press imperatively (not recommended)
+
+# install ff2p-press imperatively (not recommended)
+nix profile install github:mot0193/ff2p-press
 ```
 
 # Quick Usage
