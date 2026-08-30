@@ -10,27 +10,27 @@ Software encoders use the CPU for encoding, which makes them slower than hardwar
 ## libx265
 Encodes videos in the H.265 (or HEVC) format.
 
-Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.
+Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.\
 Default preset (if no preset is specified): `medium`
 
 ## libx264
 Encodes videos in the H.264 (or AVC) format.
 
-Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.
+Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.\
 Default preset (if no preset is specified): `slower`
 
 ## libsvtav1
 Encodes videos in the AV1 format.
 
-Valid presets: `13` through `0`, where 0 is the slowest and 13 is the fastest
-Default preset (if no preset is specified): `5`
+Valid presets: `13` through `0`, where 0 is the slowest and 13 is the fastest\
+Default preset (if no preset is specified): `5`\
 Extra FFmpeg parameters: `-svtav1-params lookahead=42`
 
 ## libaom-av1
 Encodes videos in the AV1 format.
 
-Valid presets: `8` through `0`, where 0 is the slowest and 8 is the fastest
-Default preset (if no preset is specified): `8`
+Valid presets: `8` through `0`, where 0 is the slowest and 8 is the fastest\
+Default preset (if no preset is specified): `8`\
 Extra FFmpeg parameters: `-row-mt 1`
 
 > [!NOTE]
@@ -39,8 +39,8 @@ Extra FFmpeg parameters: `-row-mt 1`
 ## libvpx-vp9
 Encodes videos in the VP9 format.
 
-Valid presets: `8` through `-8`, where -8 is the slowest and 4 is the fastest*
-Default preset (if no preset is specified): `4`
+Valid presets: `8` through `-8`, where -8 is the slowest and 4 is the fastest*\
+Default preset (if no preset is specified): `4`\
 Extra FFmpeg parameters: `-row-mt 1`
 
 > [!IMPORTANT]
@@ -58,6 +58,7 @@ NVENC is the hardware encoder some Nvidia GPUs have. [Depending on your GPU](htt
 - `av1_nvenc`
 
 These apply to all NVENC encoders:
+
 Valid presets: `p7` through `p1`, where p7 is the slowest and p1 is the fastest
 Default preset (if no preset is specified): `p7`
 Extra FFmpeg parameters: `-rc cbr` `-multipass fullres`
