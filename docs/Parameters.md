@@ -52,7 +52,7 @@ For example: `compressed_BLUE PRINCE.mp4`
 
 ## Video Parameters
 ### -VideoEncoder (Alias: -cv)
-The video encoder used for compressing the input video. Not all FFmpeg encoders are available to use through ff2ppress. Check the available [encoders](Encoders.md).
+The video encoder used for compressing the input video. Not all FFmpeg encoders are available to use through ff2ppress. Check the available [encoders](Encoders.md#software-video-encoders).
 
 Default is libx265.
 
@@ -164,7 +164,7 @@ If you dont have a specific target size requirement for a video, you may use `-b
 
 ## Audio Parameters
 ### -SelectedAudioEncoder (Alias: -ca)
-The audio encoder used for compressing the input video's audio. Not all FFmpeg encoders are available to use through ff2ppress. Check the available [encoders](Encoders.md).
+The audio encoder used for compressing the input video's audio. Not all FFmpeg encoders are available to use through ff2ppress. Check the available [encoders](Encoders.md#audio-encoders).
 
 Default is libopus.
 
@@ -202,7 +202,7 @@ Default is false.
 #### Example:
 After the video bitrate has been calculated, the script checks if the audio would take up more than 20% of the output video file. If it would, the script automatically recalculates the audio bitrate so it takes at most 20% of the file. This prevents the audio bitrate from leaving proportionally less bitrate for the video stream, or worse, the audio bitrate taking up more than 100% of the file. This specific issue tends to happen with long videos set to very small target sizes.
 
-Use PrioritizeAudioBitrate if you wish to make the script use your selected audio bitrate instead of letting the script lower the bitrate to 20% of the file. The script will still check if the audio would take 100% or more of the file target size.
+Use PrioritizeAudioBitrate to prevent the script automatically lowering the bitrate so it takes up 20% of the file. The script will still check if the audio would take 100% or more of the file target size.
 
 #### Usage:
 `-PrioritizeAudioBitrate 1` (if the edge case mentioned above gets triggered, audio will not be recalculated to fit 20% of the file)

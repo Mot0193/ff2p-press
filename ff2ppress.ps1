@@ -218,11 +218,14 @@ if ($TargetVideoBitrate_kbps -le 0) {
 $EncoderPresetInfo = @{
     "libx265"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "medium"; EncParamsCompatible = $true }
     "libx264"    = @{ Valid = "ultrafast","superfast","veryfast","faster","fast","medium","slow","slower","veryslow","placebo"; Default = "slower"; EncParamsCompatible = $true }
-    "hevc_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
-    "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; IsNvenc = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+    "libsvtav1"  = @{ Valid = 0 .. 13; Default = "5"; EncParamsCompatible = $true; DefaultExtraArgs = @("-svtav1-params", "lookahead=42") }
+
+    "hevc_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+    "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+    "av1_nvenc"  = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
+
     "libaom-av1" = @{ Valid = 0 .. 8; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
-    "libsvtav1"  = @{ Valid = 0 .. 13; Default = "5"; EncParamsCompatible = $true; DefaultExtraArgs = @("-svtav1-params", "lookahead=42")}
-    "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1")}
+    "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1") }
 }
 $EncoderInfo = $EncoderPresetInfo[$VideoEncoder]
 
@@ -231,6 +234,19 @@ $AudioEncoders = @(
     "aac",
     "copy"
 )
+
+if ($EncoderPresetInfo.ContainsKey($VideoEncoder)) {
+    if ($VideoEncoderPreset -notin $EncoderInfo.Valid) {
+        if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')) {
+            Write-Warning "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"$($EncoderInfo.Default)`"."
+        }
+        $VideoEncoderPreset = $EncoderInfo.Default
+    }
+}
+else {
+    Write-Error "Unknown/Unavailable video encoder: $VideoEncoder. Check the available encoders in readme."
+    exit 1
+}
 
 Write-Information "[FF2PPRESS Video Info]"
 Write-Information ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F2} MiB / {2:F2} kbps" -f $StartingVideoDuration_sec, $StartingVideoSize_MiB, $StartingVideoBitrate_kbps)
@@ -248,19 +264,6 @@ while (1){
     $FFmpegArg_JustTrimming.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-i", $InputVideo))
     $FFmpegArg_Pass1.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
     $FFmpegArg_Pass2.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
-
-    if ($EncoderPresetInfo.ContainsKey($VideoEncoder)) {
-        if ($VideoEncoderPreset -notin $EncoderInfo.Valid) {
-            if ($PSBoundParameters.ContainsKey('VideoEncoderPreset')) {
-                Write-Warning "Preset `"$VideoEncoderPreset`" is not a valid preset for $VideoEncoder, defaulting to preset `"$($EncoderInfo.Default)`"."
-            }
-            $VideoEncoderPreset = $EncoderInfo.Default
-        }
-    }
-    else {
-        Write-Error "Unknown/Unavailable video encoder: $VideoEncoder. Check the available encoders in readme."
-        exit 1
-    }
     
     if (($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps) -and ($EncodingAttempts -lt 1) -and $PSBoundParameters.ContainsKey('TargetVideoTrim')){
         # the target video bitrate being higher than the input video's bitrate isnt a very good decider for the just trimming mode. Ill need to account for the audio size too, but for now this works
@@ -305,11 +308,10 @@ while (1){
         $FFmpegArg_JustTrimming.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") )
 
         if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
-            if ($TargetVideoTrimEnd -eq "end"){
-                $FFmpegArg_JustTrimming.AddRange( [string[]]@("-ss", $TargetVideoTrimStart) )
-            }
-            else {
-                $FFmpegArg_JustTrimming.AddRange( [string[]]@( "-ss", $TargetVideoTrimStart, "-to", $TargetVideoTrimEnd) )
+            $FFmpegArg_JustTrimming.AddRange( [string[]]@("-ss", $TargetVideoTrimStart ) )
+
+            if (-not($TargetVideoTrimEnd -eq "end")){
+                $FFmpegArg_JustTrimming.AddRange( [string[]]@("-to", $TargetVideoTrimEnd) )
             }
         }
 
@@ -361,7 +363,7 @@ while (1){
         #$FFmpegArg_Pass1.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") ) # audio is discarded on the 1st pass
         $FFmpegArg_Pass2.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") )
 
-        if (-not $EncoderInfo.ContainsKey("IsNvenc")){
+        if (-not $EncoderInfo.ContainsKey("Skip1Pass")){
             $FFmpegArg_Pass1.AddRange( [string[]]@("-pass", "1", "-passlogfile", $PassLogPrefix) )
             $FFmpegArg_Pass2.AddRange( [string[]]@("-pass", "2", "-passlogfile", $PassLogPrefix) )
         }
@@ -443,7 +445,7 @@ while (1){
         ffmpeg $FFmpegArg_JustTrimming
     }
     else {
-        if (-not $EncoderInfo.IsNvenc){
+        if (-not $EncoderInfo.Skip1Pass){
             Write-Host "Start 1st pass..."
             ffmpeg $FFmpegArg_Pass1
         }

@@ -53,7 +53,7 @@ nix profile install github:mot0193/ff2p-press
 ```
 
 # Quick Usage
-Here you can find a short list of the most common parameters and use cases. You can find a full list of [Parameters](/docs/Parameters.md) in the [docs folder](/docs/). 
+Here you can find a short list of the most common parameters and use cases. You can find a full list of [Parameters](/docs/Parameters.md) in the [docs folder](/docs/).
 
 ## Common parameters
 | Parameter | Description |
@@ -61,8 +61,8 @@ Here you can find a short list of the most common parameters and use cases. You 
 |`-i <path_to_file>`| Video file input. This is the only required parameter for the script to function|
 |`-s <desired_file_size_in_MiB>`| Target size of the file in mebibytes. The default is 20 MiB, enough for the Discord file size limit|
 |`-o <folder_path>`| Output folder for the compressed video. Not setting this will output the video in the same folder as the input video|
-|`-cv <encoder>` | The encoder used for compressing the video (e.g. `libx264`). Available encoders are listed in the [Supported Encoders](/docs/Encoders.md) documentation file.|
-|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Supported Encoders](/docs/Encoders.md) for the preset names for each encoder. |
+|`-cv <encoder>` | The encoder used for compressing the video (e.g. `libx264`). Available encoders are listed in the [Encoders](/docs/Encoders.md) documentation file.|
+|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Encoders](/docs/Encoders.md) for the preset names for each encoder. |
 |`-h <desired_resolution>`<br> or <br>`-w <desired_resolution>`| Rescale resolution. You may only use -h (height) to automatically scale the width to match the aspect ratio or vice versa (e.g. using `-h 1080` on a 2560x1440 video will result into a 1920x1080 video). Scaling down a video can make encoding faster.|
 
 ## Examples of Usage

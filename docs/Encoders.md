@@ -1,79 +1,73 @@
-# Supported Video Encoders
+Here you'll find a list of FFmpeg encoders that FF2ppress supports, as well as the presets you can set for each encoder. Some encoders may come with extra ffmpeg parameters that the script sets automatically, they are listed here too.
 
-The default video encoder is libx265 at the "medium" preset. I manually picked the default preset for each encoder, which i considered to be balanced enough for most users, but would still provide good quality.
+The default video encoder is `libx265` with the `medium` preset, and the default audio encoder is `libopus` at `128`k bitrate. See the relevant [Parameters](Parameters.md) for changing encoders, presets, and the audio bitrate.
 
-## libx265 (hevc/H265)
-This is the default encoder.
+Encoders and video formats are complicated, there's no easy answers for questions such as "Whats the best encoder". That question depends on your use case, your hardware, and your own subjective judgment when it comes to quality and encode times. I reccomend trying out different encoders and their presets to come up with your own conclusion. 
 
-H265 is a decent codec overall, but can encode pretty slowly for what it offers. In some cases, I found that using libsvtav1 is both faster and yields higher quality. Though, from my testing, libx265 is excellent at actually hitting the target size in one try. Some devices, such as older smartphones, may struggle to play h265 videos. Some services and programs may not support h265 videos.
+# Software Video Encoders
+Software encoders use the CPU for encoding, which makes them slower than hardware encoders, but they have a lot more room for quality, tweaking settings, and dont require dedicated hardware (such as a GPU with hardware encoding). They are also better suited for targeting specific file sizes, which is the primary goal of this script.
 
-libx265 supports these presets: (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
+## libx265
+Encodes videos in the H.265 (or HEVC) format.
 
-The default preset for this script is "medium"
+Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.
+Default preset (if no preset is specified): `medium`
 
-## hevc_nvenc (hevc/H265 hardware accelerated for Nvidia GPUs)
+## libx264
+Encodes videos in the H.264 (or AVC) format.
 
-In general, hardware-accelerated encoders can provide worse quality than their software (CPU) versions (in this case, compared to libx265), but they are A LOT faster even at the highest quality/preset settings.
+Valid presets: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.
+Default preset (if no preset is specified): `slower`
 
-hevc_nvenc’s main presets are: p1, p2, p3, … p7. Higher values provide higher quality.
+## libsvtav1
+Encodes videos in the AV1 format.
 
-The default preset for this script is "p7"
+Valid presets: `13` through `0`, where 0 is the slowest and 13 is the fastest
+Default preset (if no preset is specified): `5`
+Extra FFmpeg parameters: `-svtav1-params lookahead=42`
+
+## libaom-av1
+Encodes videos in the AV1 format.
+
+Valid presets: `8` through `0`, where 0 is the slowest and 8 is the fastest
+Default preset (if no preset is specified): `8`
+Extra FFmpeg parameters: `-row-mt 1`
 
 > [!NOTE]
-> Nvenc encoders don't really have a traditional 2-pass mode like how the other software encoders do, so the ff2ppress will skip the 1st pass when an nvenc encoder is selected. While they do have the ["-multipass"](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/nvenc-video-encoder-api-prog-guide/index.html#multi-pass-frame-encoding) parameter, which the script automatically sets to "fullres", it doesn't do the same thing as a proper 2-pass mode.
-> Because of this, nvenc is set to use CBR (constant bitrate), since it often has a hard time hitting video target with VBR.
+> Libaom-av1 doesn't actually have "presets", instead it uses a "cpu-used" parameter. For the purposes of this script "cpu-used" can be considered a preset, so you can use FF2ppress's -cvpreset parameter with the mentioned valid presets.
 
-## libx264 (avc/H264)
+## libvpx-vp9
+Encodes videos in the VP9 format.
 
-H264 is the least efficient out of these options when it comes to quality, but it has the benefit of encoding pretty fast (though still slower than hardware encoders). It's the most compatible with devices and services, which means it's the best option if you want to guarantee that the video can be played with no issues.
-
-libx264 supports the same presets as libx265: (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo)
-
-The default preset for this script is "slower"
-
-## h264_nvenc (H264 hardware accelerated for Nvidia GPUs)
-
-libx264 is pretty fast already on the CPU, but for the sake of having the option, the script supports h264_nvenc too. Once again, hardware-accelerated encoders are very fast even at their highest settings, but they have a lower quality ceiling compared to their cpu versions (in this case libx264).
-
-h264_nvenc supports the same main presets as hevc_nvenc: p1, p2, p3, … p7. Higher values provide higher quality.
-
-The default preset for this script is "p7"
-
-CBR (Constant bitrate) is also enabled.
-
-## libsvtav1 (av1)
-
-> [!WARNING]
-> Make sure your ffmpeg version is at least 8.1 in order to properly use svtav1 in 2-pass mode!
-
-AV1 is considered one of the best codecs in terms of efficiency. Compared to AOM-AV1, SVT-AV1 is the faster av1 encoder, being able to scale better across cpu cores, comes with lots of presets and many other fancy features, and in general it’s the recommended av1 encoder to use. If you wish to use some of its features, such as Variance Boost, you can use FF2press’s [-params](Parameters.md#-encoderparameters-alias--params) argument to pass encoder-specific arguments to ffmpeg.
-
-SVT-AV1 has matured a lot, and from my experience it's pretty fast for the quality it can achieve. In some cases, since AV1 is royalty-free, it can have better service support compared to h265. But some devices, especially smartphones, can struggle to play AV1 videos as they may be lacking hardware AV1 decoders.
-
-libsvtav1 supports these presets: 0, 1, … 13, with 0 being the slowest and 13 the fastest.
-
-The default preset for this script is "5"
-
-## libaom-av1 (av1)
-
-AOM-AV1 is the reference implementation of AV1, which means it prioritizes quality and is extremely slow. libaom-av1 does not have "presets" but it does have the "cpu-used" parameter, which, for the purposes of this script it can be considered a "preset" setting.
-
-libaom-av1 supports these "cpu-used" values as "presets": (0, 1, 2, … 8), 0 being the slowest while 8 is the fastest.
-
-The default preset for this script is "8"
-
-## libvpx-vp9 (vp9)
-
-VP9 is known for being "YouTube’s codec", as it was originally developed by Google and it’s the go-to codec that YouTube uses. It’s meant to be slightly worse than h265 in terms of efficiency, but at a much higher decoding (playback) speed. Unfortunately, this comes at the cost of a fairly slow encoding speed, as libvpx-vp9 is the reference implementation of vp9.
-Like libaom-av1, the encoder doesn’t have "presets", instead is uses a "cpu-used" parameter, which, for the purposes of this script it can be considered as a "preset" setting.
+Valid presets: `8` through `-8`, where -8 is the slowest and 4 is the fastest*
+Default preset (if no preset is specified): `4`
+Extra FFmpeg parameters: `-row-mt 1`
 
 > [!IMPORTANT]
-> You should probably never use a preset of 5 and above, as the 1st pass will be significantly slower. From my testing preset 4 is the fastest, and it’s the default for this script.
+> *With 2-pass enabled, libvpx-vp9 is actually slower on presets 5 and above, so it's not recommended to use them.
 
-libvpx-vp9 supports these "cpu-used" values as "presets": (-8, -7, … 7, 8), with -8 being the slowest while 4 being the fastest. Values of 5 and above are actually slower on the 1st pass, making them not worth it.
+> [!NOTE]
+> Libvpx-vp9 doesn't actually have "presets", instead it uses a "cpu-used" parameter. For the purposes of this script "cpu-used" can be considered a preset, so you can use FF2ppress's -cvpreset parameter with the mentioned valid presets.
 
-# Supported Audio Encoders: libopus / aac
+# Hardware Video Encoders
 
-The default audio encoder is libopus. From what I read, Opus does great at medium bitrates (64k, 128k, 192k), but at very low bitrates you might want to try AAC. At high bitrates, the difference between codecs is minor.
+## NVENC
+NVENC is the hardware encoder some Nvidia GPUs have. [Depending on your GPU](https://developer.nvidia.com/video-encode-decode-support-matrix), FF2ppress supports the following encoders:
+- `h264_nvenc`
+- `hevc_nvenc`
+- `av1_nvenc`
 
-By default, the script will skip encoding the audio if the bitrate is already below the target, and it will just copy the audio from the input video to the output video. In this case, you may use [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool) to forcefully re-encode the audio to your selected codec, but it will still use the input video’s audio bitrate if it’s lower than the target audio bitrate.
+These apply to all NVENC encoders:
+Valid presets: `p7` through `p1`, where p7 is the slowest and p1 is the fastest
+Default preset (if no preset is specified): `p7`
+Extra FFmpeg parameters: `-rc cbr` `-multipass fullres`
+
+> [!NOTE]
+> NVENC lacks a true 2-pass mode, so FF2ppress will do only 1 pass. NVENC also has a hard time hitting the file target with VBR (variable bitrate), so CBR (constant bitrate) is used instead.
+
+# Audio Encoders
+Available audio encoders are:
+- `libopus`
+- `aac`
+
+The default target audio bitrate is `128` (kbps) or the input video's audio bitrate, if it's lower.
