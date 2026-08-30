@@ -59,8 +59,8 @@ NVENC is the hardware encoder some Nvidia GPUs have. [Depending on your GPU](htt
 
 These apply to all NVENC encoders:
 
-Valid presets: `p7` through `p1`, where p7 is the slowest and p1 is the fastest
-Default preset (if no preset is specified): `p7`
+Valid presets: `p7` through `p1`, where p7 is the slowest and p1 is the fastest\
+Default preset (if no preset is specified): `p7`\
 Extra FFmpeg parameters: `-rc cbr` `-multipass fullres`
 
 > [!NOTE]
