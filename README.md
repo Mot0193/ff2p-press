@@ -19,8 +19,7 @@ This customizability tries not to sacrifice ease of use:
 
 ## On Windows
 
-On Windows, make sure PowerShell and FFmpeg (with FFprobe) are installed and updated.
-Your FFmpeg version should be above 8.1, and it should contain all the script-compatible [encoders](/docs/Encoders.md) that you wish to use. You can install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
+On Windows, make sure PowerShell and FFmpeg (with FFprobe) are installed **and updated!** FFmpeg must be compiled with all the script-compatible [encoders](/docs/Encoders.md) you wish to use. You may install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
 ```
 winget install Microsoft.PowerShell
 winget install ffmpeg
@@ -32,7 +31,7 @@ git clone https://github.com/Mot0193/ff2p-press.git && cd ff2p-press
 ```
 
 If you get this error when you try to run ff2ppress.ps1: `The file ff2ppress.ps1 is not digitally signed`, open a PowerShell window and run:
-```
+```pwsh
 dir -r C:\path\to\folder\ff2p-press\*.ps1 | Unblock-File
 ```
 You may add ff2ppress.ps1 to your PATH variable if you'd like.
