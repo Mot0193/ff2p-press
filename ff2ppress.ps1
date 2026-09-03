@@ -44,6 +44,12 @@ param(
     [Alias("retrylow")]
     $RetryEncodingPercentageLowAmount = -1, # negative values enables dynamic mode
 
+    [Alias("fancybar")]
+    [bool]$UseProgressBar = $true,
+
+    [Alias("y")]
+    [int]$OverwriteFiles = 1, # If file exists, 0 = dont overwrite and exit; 1 = overwrite; 2 = ask
+
     [Parameter(ValueFromRemainingArguments)]
     [string[]]$RemainingFFmpegUserArguments
 )
@@ -262,8 +268,20 @@ while (1){
     Write-Information "[FF2PPRESS Video Info]"
 
     $FFmpegArg_JustTrimming.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-i", $InputVideo))
-    $FFmpegArg_Pass1.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
-    $FFmpegArg_Pass2.AddRange([string[]]@("-hide_banner", "-loglevel", "error", "-stats", "-i", $InputVideo))
+    $FFmpegArg_Pass1.AddRange([string[]]@("-hide_banner", "-loglevel", "error"))
+    $FFmpegArg_Pass2.AddRange([string[]]@("-hide_banner", "-loglevel", "error"))
+
+    if ($UseProgressBar){
+        $FFmpegArg_Pass1.AddRange([string[]]@("-progress", "pipe:1", "-nostats"))
+        $FFmpegArg_Pass2.AddRange([string[]]@("-progress", "pipe:1", "-nostats"))
+    }
+    else {
+        $FFmpegArg_Pass1.Add("-stats")
+        $FFmpegArg_Pass2.Add("-stats")
+    }
+
+    $FFmpegArg_Pass1.AddRange([string[]]@("-i", $InputVideo))
+    $FFmpegArg_Pass2.AddRange([string[]]@("-i", $InputVideo))
     
     if (($TargetVideoBitrate_kbps -ge $StartingVideoBitrate_kbps) -and ($EncodingAttempts -lt 1) -and $PSBoundParameters.ContainsKey('TargetVideoTrim')){
         # the target video bitrate being higher than the input video's bitrate isnt a very good decider for the just trimming mode. Ill need to account for the audio size too, but for now this works
@@ -301,6 +319,33 @@ while (1){
         exit 1
     }
 
+    if (Test-Path -Path $FinalOutputFile){
+        switch ($OverwriteFiles) {
+            0 {
+                Write-Error "File `'$FinalOutputFile`' already exists. Not overwriting."
+                exit 1
+            }
+            1 {
+                Write-Warning "Overwriting existing file: `'$FinalOutputFile`'."
+                $FFmpegArg_JustTrimming.Add("-y")
+                $FFmpegArg_Pass1.Add("-y")
+                $FFmpegArg_Pass2.Add("-y")
+            }
+            2 {
+                Write-Warning "File `'$FinalOutputFile`' already exists."
+                $response = Read-Host "Overwrite? [n/Y]"
+                if ($response -ne "n"){
+                    $FFmpegArg_JustTrimming.Add("-y")
+                    $FFmpegArg_Pass1.Add("-y")
+                    $FFmpegArg_Pass2.Add("-y")
+                }
+                else {
+                    Write-Host "Not overwriting file."
+                    exit 0
+                }
+            }
+        }
+    }
     Write-Host "Output file path: `"$FinalOutputFile`"."
 
     if ($JustTrimmingEnabled){
@@ -445,29 +490,30 @@ while (1){
         ffmpeg $FFmpegArg_JustTrimming
     }
     else {
+        $ProgressBarPass = 0
+
         if (-not $EncoderInfo.Skip1Pass){
-            Write-Host "Start 1st pass..."
-            ffmpeg $FFmpegArg_Pass1
+            $ProgressBarPass++ # advance to pass 1. If the encoder is Skip1Pass, $ProgressBarPass remains 0, which is what we want for Write-ConsoleProgressBar or Invoke-FFmpeg
+            
+            $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass1 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
+            if ($FFmpegExitCode -ne 0) {
+                exit $FFmpegExitCode
+            }
+
+            $ProgressBarPass++ # advance to pass 2
         }
-        Write-Host "Start final pass..."
-        ffmpeg $FFmpegArg_Pass2
+
+        $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass2 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
+        if ($FFmpegExitCode -ne 0) {
+            exit $FFmpegExitCode
+        }
+
+        if ($UseProgressBar) { Write-Host ""}
     }
 
     $EncodingAttempts++
 
-    try {
-        $ResultingVideoSize_MiB = (Get-Item -LiteralPath $FinalOutputFile -ErrorAction Stop).Length / 1MB
-    }
-    catch {
-        Write-Error "Output file does not exist. An FFmpeg error may have occured."
-        exit 1
-    }
-
-    if ($ResultingVideoSize_MiB -eq 0){
-        Write-Error "The output file's size is 0. An FFmpeg error may have occured."
-        Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
-        exit 1
-    }
+    $ResultingVideoSize_MiB = (Get-Item -LiteralPath $FinalOutputFile -ErrorAction Stop).Length / 1MB
 
     if (($ResultingVideoSize_MiB -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
@@ -499,7 +545,7 @@ while (1){
 
             Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
 
-            Write-Host "Attempt $EncodingAttempts took $ElapsedAttemptTime seconds ($($ElapsedAttemptTime / 60) minutes)"
+            Write-Host ("Attempt {0:F2} took {1:F2} seconds ({2:F2} minutes)" -f $EncodingAttempts, $ElapsedAttemptTime, $($ElapsedAttemptTime / 60))
             Write-Host "=== === Attempt $($EncodingAttempts+1) === ==="
         }
         else {
@@ -520,8 +566,8 @@ while (1){
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
 
 $EndTime = Get-Date
-if ($EncodingAttempts -gt 1) { Write-Host "Attempt $EncodingAttempts took $ElapsedAttemptTime seconds ($($ElapsedAttemptTime / 60) minutes)" }
+if ($EncodingAttempts -gt 1) { Write-Host ("Attempt {0:F2} took {1:F2} seconds ({2:F2} minutes)" -f $EncodingAttempts, $ElapsedAttemptTime, $($ElapsedAttemptTime / 60)) }
 $ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeTotalStartTime).TotalSeconds, 2))
-Write-Host "Encoding took $ElapsedAttemptTime seconds in total ($($ElapsedAttemptTime / 60) minutes)"
+Write-Host ("Encoding took {0:F2} seconds in total ({1:F2} minutes)" -f $ElapsedAttemptTime, $($ElapsedAttemptTime / 60))
 
 Write-Host "=== === === Video Done! === === ==="

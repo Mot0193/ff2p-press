@@ -235,7 +235,7 @@ If the input video has multiple video streams ff2ppress can only keep one of the
 **Default:** `1`
 
 Automatically retry to encode the video if it fails to get down to the target size.\
-The [-retrylow](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow-bool) parameter determines by how much the bitrate should be lowered on each attempt.
+The [-retrylow](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow) parameter determines by how much the bitrate should be lowered on each attempt.
 
 **Usage:**\
 `-retry 0` (disable automatic retry if the video goes over the target size)
@@ -249,6 +249,26 @@ If this value is set to a negative number (e.g -1), the percentage will be selec
 **Usage:**\
 `-retrylow 5` (each subsequent retry lowers the bitrate by 5%)\
 `-retrylow -1` (enable dynamic mode)
+
+### -UseProgressBar (Alias: -fancybar) (bool)
+**Default:** `1`
+
+Whether or not to display FF2ppress's own progress bar while encoding the video. Disabling this displays ffmpeg's native progress information instead.
+
+**Usage:**\
+`-fancybar 0` (disable the script's loading bar, use FFmpeg's "-stats" instead)
+
+### -OverwriteFiles (Alias: -y)
+**Default:** `1`
+
+In case the output video file already exists, this controls whether or not to overwrite it. Possible values are:
+- `0` (never overwrite files, will exit the script)
+- `1` (always overwrite existing files)
+- `2` (always prompt the user and let them choose)
+
+**Usage:**\
+`-y 0` (wont overwrite existing files)
+`-y 2` (if the file exists, ask the user if it should be overwritten)
 
 ## Debug Mode (see the ffmpeg argument list before compressing)
 
@@ -265,11 +285,6 @@ This feature is useful if you wish to achieve something that this script's own p
 Add `-metadata` to the output video: 
 ```
 ff2ppress.ps1 -i video.mp4 -cv libx264 -s 50 -metadata comment="yay metadata" -metadata title="the sickest title"
-```
-
-Use `-y` to always overwrite existing files:
-```
-ff2ppress.ps1 -i video.mp4 -y
 ```
 
 Use various video or audio [filters](https://ffmpeg.org/ffmpeg-filters.htm), such as `fps` to change the output framerate of the video:

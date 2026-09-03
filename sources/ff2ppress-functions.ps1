@@ -166,3 +166,120 @@ function Get-AudioBitrate {
 
     return [double]$AudioBitrate
 }
+
+function Write-ConsoleProgressBar {
+    param(
+        [Parameter(Mandatory)][double]$CurrentTime,
+        [Parameter(Mandatory)][double]$EndTime,
+        [Parameter(Mandatory)][string]$ElapsedTimestamp,
+
+        [int]$PassNumber = 1,
+        [int]$BarWidth = 40,
+        [char]$Empty_Fill = " ",
+        [char]$PassOne_Fill = "░",
+        [char]$PassTwo_Fill = "▓"
+    )
+
+    $PercentageCompleteRatio = [math]::Clamp($($CurrentTime / $EndTime), 0.0, 1.0)
+
+    $SegmentsFilled = [int][math]::Round($BarWidth * $PercentageCompleteRatio)
+    $SegmentsEmpty = $BarWidth - $SegmentsFilled
+
+    switch ($PassNumber){
+        0 {
+            # pass 0 is used for pass 2, but if pass 1 was skipped. For example when NVENC encoders are used
+            $ProgressBar = ([string]$PassTwo_Fill * $SegmentsFilled) + ([string]$Empty_Fill * $SegmentsEmpty)
+        }
+        1 {
+            $ProgressBar = ([string]$PassOne_Fill * $SegmentsFilled) + ([string]$Empty_Fill * $SegmentsEmpty)
+        }
+        2 {
+            $ProgressBar = ([string]$PassTwo_Fill * $SegmentsFilled) + ([string]$PassOne_Fill * $SegmentsEmpty)
+        }
+    }
+
+    [string]$PercentageComplete = [System.Math]::Round($PercentageCompleteRatio * 100)
+    # the percentage can vary between 1 and 3 characters (1-9%; 10-99%; 100%). This adds spaces so the percentage string is always 3 characters long, so everything stays aligned and looking nice
+    $PrintPercentage = $PercentageComplete + [string]' ' * (3 - $PercentageComplete.Length)
+
+
+    Write-Host -NoNewline ("`r{0}▏{1}% Pass {2} | Elapsed: {3}" -f $ProgressBar, $PrintPercentage, $PassNumber, $ElapsedTimestamp)
+    #Write-Host -NoNewline ("`r{0}▏{1}% Pass {2}" -f $ProgressBar, $PrintPercentage, $PassNumber)
+}
+
+function Invoke-FFmpeg {
+    param(
+        [Parameter(Mandatory)][System.Collections.Generic.List[string]]$FFmpegArgList,
+        [Parameter(Mandatory)][double]$VideoDuration,
+        [Parameter(Mandatory)][int]$PassNumber,
+        [bool]$UseProgressBar = $true
+    )
+    
+    $FFmpeg_Process = [System.Diagnostics.Process]::new()
+    $FFmpeg_PSI = [System.Diagnostics.ProcessStartInfo]::new('ffmpeg')
+    foreach ($arg in $FFmpegArgList) { $FFmpeg_PSI.ArgumentList.Add($arg) }
+    
+    if ($UseProgressBar){
+        $FFmpeg_PSI.UseShellExecute = $false
+        $FFmpeg_PSI.CreateNoWindow = $true
+        # redirect stdout to be able to read ffmpeg's -progress output, so our own loading bar can be drawn
+        $FFmpeg_PSI.RedirectStandardOutput = $true
+        $FFmpeg_PSI.RedirectStandardError = $true
+
+        $FFmpeg_Process = [System.Diagnostics.Process]::new()
+        $FFmpeg_Process.StartInfo = $FFmpeg_PSI
+
+        $StdErr_Lines = [System.Collections.Generic.List[string]]::new()
+        $StdErr_SourceId = "ffmpeg_stderr_$([guid]::NewGuid())"
+        # Subscribe to ErrorDataReceived so ffmpeg errors can still be read
+        $null = Register-ObjectEvent -InputObject $FFmpeg_Process -EventName ErrorDataReceived -SourceIdentifier $StdErr_SourceId -MessageData $StdErr_Lines -Action {
+            if ($EventArgs.Data) { 
+                #Write-Host "`n$($EventArgs.Data)"
+                $Event.MessageData.Add($EventArgs.Data)
+            }
+        }
+
+        $null = $FFmpeg_Process.Start()
+        $FFmpeg_Process.BeginErrorReadLine()
+
+        # start a stopwatch to print the elapsed time on the loading bar
+        $ElapsedTime_Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        while (-not $FFmpeg_Process.StandardOutput.EndOfStream){
+            $StdOut_Line = $FFmpeg_Process.StandardOutput.ReadLine()
+            if ([string]::IsNullOrEmpty($StdOut_Line)) { continue }
+
+            if (($StdOut_Line -match "^out_time=((\d+:|.)*)") -and -not($Matches[1] -eq "N/A")){
+                $CurrentTime = ConvertTo-Seconds $Matches[1]
+
+                Write-ConsoleProgressBar -CurrentTime $CurrentTime -EndTime $VideoDuration -PassNumber $PassNumber -ElapsedTimestamp $ElapsedTime_Stopwatch.Elapsed.ToString('hh\:mm\:ss')
+            }
+        }
+        $FFmpeg_Process.WaitForExit()
+
+        if ($FFmpeg_Process.ExitCode -ne 0) {
+            # if ffmpeg exits with an error, write the exit code
+            Write-Error "ffmpeg exited with code $($FFmpeg_Process.ExitCode)"
+            # print ffmpeg's error
+            Write-Host $($StdErr_Lines -join [Environment]::NewLine) -ForegroundColor Red
+            return $FFmpeg_Process.ExitCode
+        }
+
+        Unregister-Event -SourceIdentifier $StdErr_SourceId
+        Remove-Job -Name $StdErr_SourceId -Force # Register-ObjectEvent also creates a job apparently, which we can remove after we've unsubscribed.
+    }
+    else {
+        $FFmpeg_Process.StartInfo = $FFmpeg_PSI
+
+        if ($PassNumber -eq 1){
+            Write-Host "Start 1st pass..."
+        }
+        else {
+            Write-Host "Start final pass..."
+        }
+
+        $null = $FFmpeg_Process.Start()
+        $FFmpeg_Process.WaitForExit()
+    }
+
+    return $FFmpeg_Process.ExitCode
+}
