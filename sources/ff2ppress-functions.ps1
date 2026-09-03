@@ -185,6 +185,15 @@ function Write-ConsoleProgressBar {
     $SegmentsFilled = [int][math]::Round($BarWidth * $PercentageCompleteRatio)
     $SegmentsEmpty = $BarWidth - $SegmentsFilled
 
+    <#
+    Write-Host
+    Write-Host "Current Time: $CurrentTime"
+    Write-Host "End Time: $EndTime"
+    Write-Host "Complete ratio: $PercentageCompleteRatio"
+    Write-Host "SegmentsFilled: $PercentageCompleteRatio"
+    Write-Host "SegmentsEmpty: $PercentageCompleteRatio"
+    #>
+
     switch ($PassNumber){
         0 {
             # pass 0 is used for pass 2, but if pass 1 was skipped. For example when NVENC encoders are used
@@ -239,25 +248,40 @@ function Invoke-FFmpeg {
             }
         }
 
-        $null = $FFmpeg_Process.Start()
-        $FFmpeg_Process.BeginErrorReadLine()
+        try {
+            $null = $FFmpeg_Process.Start()
+            $FFmpeg_Process.BeginErrorReadLine()
 
-        # start a stopwatch to print the elapsed time on the loading bar
-        $ElapsedTime_Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-        while (-not $FFmpeg_Process.StandardOutput.EndOfStream){
-            $StdOut_Line = $FFmpeg_Process.StandardOutput.ReadLine()
-            if ([string]::IsNullOrEmpty($StdOut_Line)) { continue }
+            # start a stopwatch to print the elapsed time on the loading bar
+            $ElapsedTime_Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            $HighestCurrentTime = 0
+            while (-not $FFmpeg_Process.StandardOutput.EndOfStream){
+                $StdOut_Line = $FFmpeg_Process.StandardOutput.ReadLine()
+                if ([string]::IsNullOrEmpty($StdOut_Line)) { continue }
 
-            if (($StdOut_Line -match "^out_time=((\d+:|.)*)") -and -not($Matches[1] -eq "N/A")){
-                $CurrentTime = ConvertTo-Seconds $Matches[1]
+                if (($StdOut_Line -match "^out_time=((\d+:|.)*)") -and -not($Matches[1] -eq "N/A")){
+                    #Write-Host "`n$StdOut_Line"
+                    $CurrentTime = ConvertTo-Seconds $Matches[1]
 
-                Write-ConsoleProgressBar -CurrentTime $CurrentTime -EndTime $VideoDuration -PassNumber $PassNumber -ElapsedTimestamp $ElapsedTime_Stopwatch.Elapsed.ToString('hh\:mm\:ss')
+                    # ffmpeg's out_time is not always accurate, sometimes the out time jumps backwards, which makes the progress bar also jump. HighestCurrentTime keeps track of the highest seen time, to at least make the progress bar freeze rather than go backwards
+                    if (-not($CurrentTime -gt $HighestCurrentTime)){
+                        $CurrentTime = $HighestCurrentTime
+                    } else { $HighestCurrentTime = $CurrentTime }
+
+                    Write-ConsoleProgressBar -CurrentTime $CurrentTime -EndTime $VideoDuration -PassNumber $PassNumber -ElapsedTimestamp $ElapsedTime_Stopwatch.Elapsed.ToString('hh\:mm\:ss')
+                }
+            }
+            $FFmpeg_Process.WaitForExit()
+        }
+        finally {
+            if (-not $FFmpeg_Process.HasExited){
+                $FFmpeg_Process.Kill($true)
             }
         }
-        $FFmpeg_Process.WaitForExit()
 
         if ($FFmpeg_Process.ExitCode -ne 0) {
             # if ffmpeg exits with an error, write the exit code
+            Write-Host ""
             Write-Error "ffmpeg exited with code $($FFmpeg_Process.ExitCode)"
             # print ffmpeg's error
             Write-Host $($StdErr_Lines -join [Environment]::NewLine) -ForegroundColor Red
@@ -276,9 +300,15 @@ function Invoke-FFmpeg {
         else {
             Write-Host "Start final pass..."
         }
-
-        $null = $FFmpeg_Process.Start()
-        $FFmpeg_Process.WaitForExit()
+        try {
+            $null = $FFmpeg_Process.Start()
+            $FFmpeg_Process.WaitForExit()
+        }
+        finally {
+            if (-not $FFmpeg_Process.HasExited){
+                $FFmpeg_Process.Kill($true)
+            }
+        }
     }
 
     return $FFmpeg_Process.ExitCode
