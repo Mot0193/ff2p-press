@@ -499,6 +499,7 @@ while (1){
             
             $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass1 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
             if ($FFmpegExitCode -ne 0) {
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
                 exit $FFmpegExitCode
             }
 
@@ -507,6 +508,7 @@ while (1){
 
         $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass2 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
         if ($FFmpegExitCode -ne 0) {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
             exit $FFmpegExitCode
         }
 
