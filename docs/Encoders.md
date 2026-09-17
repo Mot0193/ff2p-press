@@ -33,6 +33,9 @@ Valid presets: `8` through `0`, where 0 is the slowest and 8 is the fastest\
 Default preset (if no preset is specified): `8`\
 Extra FFmpeg parameters: `-row-mt 1`
 
+> [!IMPORTANT]
+> It is reccomended to use libsvtav1 instead of libaom-av1
+
 > [!NOTE]
 > Libaom-av1 doesn't actually have "presets", instead it uses a "cpu-used" parameter. For the purposes of this script "cpu-used" can be considered a preset, so you can use FF2ppress's -cvpreset parameter with the mentioned valid presets.
 

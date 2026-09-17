@@ -34,6 +34,21 @@ Path of an output folder.
 `-o  C:\Users\Mot\Desktop`\
 `-o  .\Desktop\CreativeFolderName` (relative paths work as well)
 
+### -TargetVideoFileExtension (Alias: -ext)
+**Default:** `mp4` (regardless of the input video's extension)
+
+The file extension of the output video file.
+
+**Example:**\
+If you hate `mp4` for whatever reason, you can change the output file extension to `mkv` for example: `-ext mkv`. Keep in mind that different codecs may not accept all video containers (extensions). For example [AV1](Encoders.md#libsvtav1) doesnt work in `mov` files.
+
+While this script was not intended to create animated images such as gif files, you can still use an animated `avif` file if you use the `libsvtav1` video encoder. Remember to also make the script [discard the audio](Parameters.md#-targetaudiobitrate_kbps-alias--bra) by using `-bra 0`. Since animated `avif` images still use the AV1 codec, which may be slow to decode for some devices, its best to lower the resolution, frame-rate, video preset, and even enable some svtav1 parameters which should ease playback:\
+`ff2ppress -i input.mp4 -ext avif -bra 0 -cv libsvtav1 -cvpreset 8 -h 504 -vf fps=30 -params fast-decode=2:tile-rows=1:tile-columns=1`
+
+**Usage:**\
+`-ext mkv`\
+`-ext avif` (for animated avif consider the other parameters you need to set which are mentioned above)
+
 ### -FancyRename (bool)
 **Default:** `1`
 
@@ -178,7 +193,8 @@ Keep in mind that if [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool
 ### -TargetAudioBitrate_kbps (Alias: -bra)
 **Default:** `128`
 
-The target audio bitrate in kbps. 
+The target audio bitrate in kbps. Can be set to 0 to completely discard the audio.
+
 If the input video's audio bitrate is lower than the target audio bitrate, ff2ppress will use the lower audio bitrate. In this case, if [ForceAudioEncoding](Parameters.md#-forceaudioencoding-bool) is disabled, the script will skip re-encoding the audio and it will just copy the audio stream from the input video to the output video.
 
 **Usage:**\
@@ -267,7 +283,7 @@ In case the output video file already exists, this controls whether or not to ov
 - `2` (always prompt the user and let them choose)
 
 **Usage:**\
-`-y 0` (wont overwrite existing files)
+`-y 0` (wont overwrite existing files)\
 `-y 2` (if the file exists, ask the user if it should be overwritten)
 
 ## Debug Mode (see the ffmpeg argument list before compressing)

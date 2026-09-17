@@ -7,6 +7,8 @@ param(
     [Alias("o")]
     $OutputFolder,
     $FancyRename = $true,
+    [Alias("ext")]
+    $TargetVideoFileExtension = "mp4",
 
     [Alias("cv")]
     $VideoEncoder = "libx265",
@@ -299,12 +301,12 @@ while (1){
 
     if ($FancyRename) {
         if (-not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) { 
-            $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" 
+            $outputfilename = "compressed_$($TargetVideoSize_MiB)mib_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).$TargetVideoFileExtension" 
         }
-        else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).mp4" }
+        else { $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo))_$($VideoEncoder)_$($VideoEncoderPreset).$TargetVideoFileExtension" }
     }
     else {
-        $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).mp4"
+        $outputfilename = "compressed_$([IO.Path]::GetFileNameWithoutExtension($InputVideo)).$TargetVideoFileExtension"
     }
 
     if (-not $OutputFolder) {
@@ -350,7 +352,7 @@ while (1){
 
     if ($JustTrimmingEnabled){
         $FFmpegArg_JustTrimming.AddRange( [string[]]@("-map", "0:v:$InputVideoStream") )
-        $FFmpegArg_JustTrimming.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") )
+        if ($TargetAudioBitrate_kbps -ne 0) { $FFmpegArg_JustTrimming.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") ) }
 
         if ($PSBoundParameters.ContainsKey("TargetVideoTrim")) {
             $FFmpegArg_JustTrimming.AddRange( [string[]]@("-ss", $TargetVideoTrimStart ) )
@@ -406,7 +408,7 @@ while (1){
         $FFmpegArg_Pass2.AddRange( [string[]]@("-map", "0:v:$InputVideoStream") )
 
         #$FFmpegArg_Pass1.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") ) # audio is discarded on the 1st pass
-        $FFmpegArg_Pass2.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") )
+        if ($TargetAudioBitrate_kbps -ne 0) { $FFmpegArg_Pass2.AddRange( [string[]]@("-map", "0:a:$InputAudioStream") ) }
 
         if (-not $EncoderInfo.ContainsKey("Skip1Pass")){
             $FFmpegArg_Pass1.AddRange( [string[]]@("-pass", "1", "-passlogfile", $PassLogPrefix) )
