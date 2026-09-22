@@ -232,6 +232,10 @@ $EncoderPresetInfo = @{
     "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
     "av1_nvenc"  = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
 
+    "hevc_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
+    "h264_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
+    "av1_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
+
     "libaom-av1" = @{ Valid = 0 .. 8; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
     "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1") }
 }
