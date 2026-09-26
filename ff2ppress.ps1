@@ -232,9 +232,9 @@ $EncoderPresetInfo = @{
     "h264_nvenc" = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
     "av1_nvenc"  = @{ Valid = "p1","p2","p3","p4","p5","p6","p7"; Default = "p7"; Skip1Pass = $true; DefaultExtraArgs = @("-rc", "cbr", "-multipass", "fullres") }
 
-    "hevc_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
-    "h264_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
-    "av1_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality"; Skip1Pass = $true; DefaultExtraArgs = @() }
+    "hevc_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality" }
+    "h264_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality" }
+    "av1_amf" = @{ Valid = "speed","balanced","quality","high_quality"; Default = "high_quality" }
 
     "libaom-av1" = @{ Valid = 0 .. 8; Default = "8"; UsesCpuUsed = $true; EncParamsCompatible = $true; DefaultExtraArgs = @("-row-mt", "1") }
     "libvpx-vp9" = @{ Valid = -8 .. 8; Default = "4"; UsesCpuUsed = $true; DefaultExtraArgs = @("-row-mt", "1") }
@@ -485,8 +485,10 @@ while (1){
     }
 
     if ($JustTrimmingEnabled) { Write-Debug "Final JustTrimming Arg List: $FFmpegArg_JustTrimming" }
-    if (-not $JustTrimmingEnabled) { Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1" }
-    if (-not $JustTrimmingEnabled) { Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2" }
+    else {
+        if (-not $EncoderInfo.ContainsKey("Skip1Pass")) { Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1" }
+        Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2"
+    }
     if ($DebugPreference -eq 'Continue'){ Pause } # if debug is enabled, pause the script so you can see the debug messages before starting to encode
 
     $EncodeAttemptStartTime = Get-Date

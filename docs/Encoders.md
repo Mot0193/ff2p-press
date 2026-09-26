@@ -34,7 +34,7 @@ Default preset (if no preset is specified): `8`\
 Extra FFmpeg parameters: `-row-mt 1`
 
 > [!IMPORTANT]
-> It is reccomended to use libsvtav1 instead of libaom-av1
+> It is recommended to use libsvtav1 instead of libaom-av1
 
 > [!NOTE]
 > Libaom-av1 doesn't actually have "presets", instead it uses a "cpu-used" parameter. For the purposes of this script "cpu-used" can be considered a preset, so you can use FF2ppress's -cvpreset parameter with the mentioned valid presets.
@@ -53,8 +53,10 @@ Extra FFmpeg parameters: `-row-mt 1`
 > Libvpx-vp9 doesn't actually have "presets", instead it uses a "cpu-used" parameter. For the purposes of this script "cpu-used" can be considered a preset, so you can use FF2ppress's -cvpreset parameter with the mentioned valid presets.
 
 # Hardware Video Encoders
+> [!NOTE]
+> Hardware encoders lacks a true 2-pass mode, so FF2ppress will do only 1 pass.
 
-## NVENC
+## NVENC (Nvidia)
 NVENC is the hardware encoder some Nvidia GPUs have. [Depending on your GPU](https://developer.nvidia.com/video-encode-decode-support-matrix), FF2ppress supports the following encoders:
 - `h264_nvenc`
 - `hevc_nvenc`
@@ -67,7 +69,21 @@ Default preset (if no preset is specified): `p7`\
 Extra FFmpeg parameters: `-rc cbr` `-multipass fullres`
 
 > [!NOTE]
-> NVENC lacks a true 2-pass mode, so FF2ppress will do only 1 pass. NVENC also has a hard time hitting the file target with VBR (variable bitrate), so CBR (constant bitrate) is used instead.
+> NVENC has a hard time hitting the file target with VBR (variable bitrate), so CBR (constant bitrate) is used instead.
+
+## AMF (AMD)
+AMF is the hardware encoder some AMD GPUs have. [Depending on your GPU](https://www.amd.com/en/products/graphics/radeon-for-creators/video-editing.html#formats), FF2ppress supports the following encoders:
+- `h264_amf`
+- `hevc_amf`
+- `av1_amf`
+
+These apply to all NVENC encoders:
+
+Valid presets: `speed`, `balanced`, `quality`, `high_quality`\
+Default preset (if no preset is specified): `high_quality`\
+
+> [!NOTE]
+> Due to lack of hardware and testing, I decided not to include any extra arguments, such as enabling CBR like with NVENC. If you're familiar with AMF, you may [pass your own FFmpeg arguments](Parameters.md#passing-other-ffmpeg-arguments) to fit your needs.
 
 # Audio Encoders
 Available audio encoders are:
