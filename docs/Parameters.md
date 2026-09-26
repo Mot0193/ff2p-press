@@ -40,10 +40,10 @@ Path of an output folder.
 The file extension of the output video file.
 
 **Example:**\
-If you hate `mp4` for whatever reason, you can change the output file extension to `mkv` for example: `-ext mkv`. Keep in mind that different codecs may not accept all video containers (extensions). For example [AV1](Encoders.md#libsvtav1) doesnt work in `mov` files.
+If you hate `mp4`, you can change the output file extension to `mkv` for example: `-ext mkv`. Keep in mind that different codecs may not accept all video containers (extensions). For example [AV1](Encoders.md#libsvtav1) doesnt work in `mov` files.
 
 While this script was not intended to create animated images such as gif files, you can still use an animated `avif` file if you use the `libsvtav1` video encoder. Remember to also make the script [discard the audio](Parameters.md#-targetaudiobitrate_kbps-alias--bra) by using `-bra 0`. Since animated `avif` images still use the AV1 codec, which may be slow to decode for some devices, its best to lower the resolution, frame-rate, video preset, and even enable some svtav1 parameters which should ease playback:\
-`ff2ppress -i input.mp4 -ext avif -bra 0 -cv libsvtav1 -cvpreset 8 -h 504 -vf fps=30 -params fast-decode=2:tile-rows=1:tile-columns=1`
+`ff2ppress -i input.mp4 -ext avif -bra 0 -cv libsvtav1 -cvpreset 8 -h 504 -vf fps=30 -params fast-decode=2:tile-columns=1`
 
 **Usage:**\
 `-ext mkv`\
@@ -288,7 +288,12 @@ In case the output video file already exists, this controls whether or not to ov
 
 ## Debug Mode (see the ffmpeg argument list before compressing)
 
-You can use PowerShell's `-debug` argument when running ff2ppress to see the full ffmpeg argument lists before running ffmpeg.
+You can use PowerShell's `-debug` flag when running ff2ppress to see the full ffmpeg argument lists before running ffmpeg, as well as any other debug messages. The script will automatically pause so you can read the argument list.
+
+**Example:**
+```
+ff2ppress.ps1 -i video.mp4 -debug
+```
 
 ## Passing Other FFmpeg Arguments
 
@@ -308,6 +313,11 @@ Use various video or audio [filters](https://ffmpeg.org/ffmpeg-filters.htm), suc
 ff2ppress.ps1 -i video.mp4 -vf fps=30
 ```
 
+Some [hardware encoders](Encoders.md#hardware-video-encoders) don't support 10-bit videos, so in order to compress those you may need to change the pixel format to force 8-bit color:
+```
+ff2ppress.ps1 -i video.mp4 -cv h264_nvenc -pix_fmt yuv420p
+```
+
 ### Caveats and Limitations:
 
 - If you need to chain several options with a comma, for example when you're specifying multiple video filters with `-vf` (or `-filter:v`), you may need to put the entire comma-separated options in quotes like so:
@@ -315,7 +325,7 @@ ff2ppress.ps1 -i video.mp4 -vf fps=30
 ```
 ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
 ```
-- Your arguments will be placed right BEFORE the output file argument inside the ffmpeg argument lists.
+- Your arguments will be placed right BEFORE the output file argument inside the ffmpeg argument lists. You can use [-debug](#debug-mode-see-the-ffmpeg-argument-list-before-compressing) to see exactly how the ffmpeg argument lists will look before compressing.
 
 - Your arguments WILL be used for both passes.
 
@@ -323,5 +333,5 @@ ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,z
 
 - FF2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use ffmpeg's video filter parameter under the hood. You can add your own video filters just fine, and the script will merge these filters for you, though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your specific use case, you can of course not use ff2ppress's rescale parameters and instead add them via `-vf`.
 
-- You cannot pass an ffmpeg argument that starts with the same letter(s) as any script parameter mentioned in this document. PowerShell will try to match that parameter to a script parameter, but will fail. 
-I haven't found an ffmpeg parameter that will both technically work but can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`
+- You cannot pass an ffmpeg argument that starts with the same letter(s) as any script parameter mentioned in this document. PowerShell will try to match that parameter to a script parameter, but will fail.\
+I haven't found an ffmpeg parameter that will both technically work with the script but can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`

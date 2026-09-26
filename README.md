@@ -4,22 +4,18 @@ FF2ppress is a PowerShell script that uses 2-pass encoding via FFmpeg to compres
 
 FF2ppress's main feature is customizability and control, allowing you to change advanced FFmpeg settings and parameters, such as:
 
-* [Trimming](/docs/Parameters.md#-targetvideotrim-alias--trim) the video;
 * Changing the [video encoder](/docs/Parameters.md#-videoencoder-alias--cv) and [preset](/docs/Parameters.md#-videoencoderpreset-alias--cvpreset);
 * [Passing parameters](/docs/Parameters.md#-encoderparameters-alias--params) to the encoder;
 * Specifying the [audio or video stream](/docs/Parameters.md#-inputaudiostream-alias--audiostream) of a multi-stream input file;
 * Being able to pass most [FFmpeg arguments directly](/docs/Parameters.md#passing-other-ffmpeg-arguments), which opens up the majority of FFmpeg’s functionality;
 
-This customizability tries not to sacrifice ease of use:
-* The script comes with hand-picked defaults, which makes it easy to start using it, as it only requires the [input video parameter](/docs/Parameters.md#-inputvideo-alias--i)
-* It tries to automatically deal with most scenarios and edge cases
-* It comes with parameters that simplify some FFmpeg use cases (such as [downscaling the resolution](/docs/Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w)).
+This customizability tries not to sacrifice usability, and the script can be as simple or as complicated as you want it to be. It's easy to start using it, as all you need is [input video parameter](/docs/Parameters.md#-inputvideo-alias--i), and the default `libx265` and `libopus` encoders targeting 20 MiB file sizes should be satisfactory for most users out of the box. See [examples](#examples-of-usage) below!
 
 # Installation & Dependencies
 
 ## On Windows
 
-On Windows, make sure PowerShell and FFmpeg (with FFprobe) are installed **and updated!** FFmpeg must be compiled with all the script-compatible [encoders](/docs/Encoders.md) you wish to use. You may install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/):
+On Windows, make sure PowerShell and FFmpeg (with FFprobe) are installed and updated to their **latest version** (at least PowerShell 7 and FFmpeg 8.1). FFmpeg must be compiled with all the script-compatible [encoders](/docs/Encoders.md) you wish to use. You may install the "full" FFmpeg release from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/), and it should be fine:
 ```
 winget install Microsoft.PowerShell
 winget install ffmpeg

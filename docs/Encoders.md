@@ -54,7 +54,7 @@ Extra FFmpeg parameters: `-row-mt 1`
 
 # Hardware Video Encoders
 > [!NOTE]
-> Hardware encoders lacks a true 2-pass mode, so FF2ppress will do only 1 pass.
+> Hardware encoders lack a true 2-pass mode, so FF2ppress will only do 1 pass.
 
 ## NVENC (Nvidia)
 NVENC is the hardware encoder some Nvidia GPUs have. [Depending on your GPU](https://developer.nvidia.com/video-encode-decode-support-matrix), FF2ppress supports the following encoders:
@@ -80,7 +80,7 @@ AMF is the hardware encoder some AMD GPUs have. [Depending on your GPU](https://
 These apply to all NVENC encoders:
 
 Valid presets: `speed`, `balanced`, `quality`, `high_quality`\
-Default preset (if no preset is specified): `high_quality`\
+Default preset (if no preset is specified): `high_quality`
 
 > [!NOTE]
 > Due to lack of hardware and testing, I decided not to include any extra arguments, such as enabling CBR like with NVENC. If you're familiar with AMF, you may [pass your own FFmpeg arguments](Parameters.md#passing-other-ffmpeg-arguments) to fit your needs.
