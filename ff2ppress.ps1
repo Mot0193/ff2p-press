@@ -45,6 +45,8 @@ param(
     $RetryEncodingIfTargetNotMet = $true,
     [Alias("retrylow")]
     $RetryEncodingPercentageLowAmount = -1, # negative values enables dynamic mode
+    [Alias("nosizecheck")]
+    $SkipInputFileSizeCheck = $false,
 
     [Alias("fancybar")]
     [bool]$UseProgressBar = $true,
@@ -83,7 +85,7 @@ catch {
     exit 1
 }
 
-if ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
+if (-not $SkipInputFileSizeCheck -and ($StartingVideoSize_MiB -le $TargetVideoSize_MiB -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow')))) {
     # check if the input video size is under the target size, but only exit if the target bitrate wasnt manually set, and if brlow was used without setting a target size
     Write-Error "Target size can't be higher than the video's current size ($StartingVideoSize_MiB)."
     exit 1
@@ -147,7 +149,7 @@ if ($AudioStreamsExist){
     }
 }
 else {
-    $StartingAudioBitrate_kbps = 0
+    $StartingAudioBitrate_kbps = $null
 }
 
 # Probe video bitrate
@@ -165,7 +167,7 @@ else {
 
 $TargetAudioEncoder = $SelectedAudioEncoder
 if ($StartingAudioBitrate_kbps -le $TargetAudioBitrate_kbps) {
-    if (-not ($StartingAudioBitrate_kbps -eq 0)){
+    if ($StartingAudioBitrate_kbps){
         if (-not $ForceAudioEncoding) {
             Write-Warning "The input audio bitrate is already below the target ($StartingAudioBitrate_kbps`kbps < $TargetAudioBitrate_kbps`kbps). Copying audio, wont transcode."
             $TargetAudioEncoder = "copy"

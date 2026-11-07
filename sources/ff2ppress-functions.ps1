@@ -114,13 +114,14 @@ function Get-VideoBitrate {
         [string]$NullDevice
     )
 
-    $Attempts = 1
+    $Attempts = 0
 
     while (-not $VideoBitrate){
+        $Attempts++
         switch ($Attempts) {
             1 {
                 try { $VideoBitrate = (ffprobe -v error -select_streams v:$VideoStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $Video) / 1000 }
-                catch {$VideoBitrate = $null}
+                catch { $VideoBitrate = $null }
             }
             2 {
                 [float]$VideoSize_KiB = (ffmpeg -i $Video -map 0:v:$VideoStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'video:(\d+)KiB').Matches[0].Groups[1].Value
@@ -130,9 +131,9 @@ function Get-VideoBitrate {
                 return $null
             }
         }
-        $Attempts++
     }
 
+    Write-Debug "Got video bitrate in $Attempts attempt(s)"
     return [double]$VideoBitrate
 }
 
@@ -145,25 +146,27 @@ function Get-AudioBitrate {
         [string]$NullDevice
     )
 
-    $Attempts = 1
+    $Attempts = 0
 
     while (($AudioBitrate -eq "N/A") -or -not $AudioBitrate){
+        $Attempts++
         switch ($Attempts) {
             1 {
                 try { $AudioBitrate = (ffprobe -v error -select_streams a:$AudioStream -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $Video) / 1000 }
-                catch {$AudioBitrate = $null}
+                catch { $AudioBitrate = $null }
             }
             2 {
-                [float]$AudioSize_KiB = (ffmpeg -i $Video -map 0:a:$AudioStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value
+                try { [float]$AudioSize_KiB = (ffmpeg -i $Video -map 0:a:$AudioStream -c copy -f null $NullDevice 2>&1 | Out-String -Stream | Select-String -Pattern 'audio:(\d+)KiB').Matches[0].Groups[1].Value }
+                catch { $AudioBitrate = $null }
                 $AudioBitrate = ($AudioSize_KiB * 8.192) / $VideoDuration
             }
             default {
                 return $null
             }
         }
-        $Attempts++
     }
 
+    Write-Debug "Got audio bitrate in $Attempts attempt(s)"
     return [double]$AudioBitrate
 }
 

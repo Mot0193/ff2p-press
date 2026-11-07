@@ -286,6 +286,16 @@ In case the output video file already exists, this controls whether or not to ov
 `-y 0` (wont overwrite existing files)\
 `-y 2` (if the file exists, ask the user if it should be overwritten)
 
+### -SkipInputFileSizeCheck (Alias: -nosizecheck) (bool)
+**Default:** `0`
+
+By default, ff2ppress will immediately exit if the input video file size is already below the target file size. This check only happens if a target size is specified via [-s](Parameters.md#-targetvideosize_mib-alias--s) (or when it's used by default). The check isn't relevant when the user manually specified a video bitrate via [-brv](Parameters.md#-targetvideobitrate_kbps-alias--brv), or a bitrate lowering percentage via [-brlow](Parameters.md#-bitratepercentagelow-alias--brlow) without setting -s.
+
+Enabling -nosizecheck will skip this check, and the script will target the selected file size regardless of the input video's size. This means that even if you input a 5mb file with the target size of 20mb, the script will still target the file size, which will result in a larger output file than the input.
+
+**Usage:**\
+`-nosizecheck 1` (skip the input file size check)
+
 ## Debug Mode (see the ffmpeg argument list before compressing)
 
 You can use PowerShell's `-debug` flag when running ff2ppress to see the full ffmpeg argument lists before running ffmpeg, as well as any other debug messages. The script will automatically pause so you can read the argument list.
