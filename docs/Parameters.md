@@ -296,6 +296,16 @@ Enabling -nosizecheck will skip this check, and the script will target the selec
 **Usage:**\
 `-nosizecheck 1` (skip the input file size check)
 
+### -ReusePassLog (bool)
+**Default:** `1`
+
+With ReusePassLog enabled, when files overshoot the target size, subsequent [retries](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) will skip the 1st pass reusing the same log file from the 1st initial pass, despite using a [lower bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow). This greatly reduces the encoding time when retrying, as (apparently) re-doing the 1st pass is not critical when changing the bitrate.
+
+Disabling ReusePassLog will always re-run the 1st pass for each retry.
+
+**Usage:**\
+`-reusepasslog 0` (always do the 1st pass when retrying)
+
 ## Debug Mode (see the ffmpeg argument list before compressing)
 
 You can use PowerShell's `-debug` flag when running ff2ppress to see the full ffmpeg argument lists before running ffmpeg, as well as any other debug messages. The script will automatically pause so you can read the argument list.

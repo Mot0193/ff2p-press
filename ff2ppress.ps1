@@ -47,6 +47,7 @@ param(
     $RetryEncodingPercentageLowAmount = -1, # negative values enables dynamic mode
     [Alias("nosizecheck")]
     $SkipInputFileSizeCheck = $false,
+    $ReusePassLog = $true,
 
     [Alias("fancybar")]
     [bool]$UseProgressBar = $true,
@@ -267,7 +268,7 @@ Write-Information ("Starting Video Duration / Size / Bitrate : {0:F2} sec / {1:F
 Write-Information ("Starting Audio Bitrate                   : {0:F2} kbps" -f $StartingAudioBitrate_kbps)
 
 $EncodingAttempts = 0
-$EncodeTotalStartTime = Get-Date
+$EncodeTotal_Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 # Start of encoding retry loop
 while (1){
     if ($EncodingAttempts -gt 0) {Write-Information "[FF2PPRESS Video Info]"}
@@ -491,9 +492,16 @@ while (1){
         if (-not $EncoderInfo.ContainsKey("Skip1Pass")) { Write-Debug "Final Pass1 Arg List: $FFmpegArg_Pass1" }
         Write-Debug "Final Pass2 Arg List: $FFmpegArg_Pass2"
     }
-    if ($DebugPreference -eq 'Continue'){ Pause } # if debug is enabled, pause the script so you can see the debug messages before starting to encode
+    if ($DebugPreference -eq 'Continue'){
+        # if debug is enabled, pause the script so you can see the debug messages before starting to encode
+        $EncodeTotal_Stopwatch.Stop() # also pause the total encoding stopwatch
+        Pause
+        $EncodeTotal_Stopwatch.Start()
+    }
 
-    $EncodeAttemptStartTime = Get-Date
+    if ($EncodingAttempts -gt 0){
+        $EncodeAttempt_Stopwatch.Restart()
+    } else { $EncodeAttempt_Stopwatch = [System.Diagnostics.Stopwatch]::StartNew() }
 
     if ($JustTrimmingEnabled) {
         Write-Host "Just trimming the video..."
@@ -505,7 +513,10 @@ while (1){
         if (-not $EncoderInfo.Skip1Pass){
             $ProgressBarPass++ # advance to pass 1. If the encoder is Skip1Pass, $ProgressBarPass remains 0, which is what we want for Write-ConsoleProgressBar or Invoke-FFmpeg
             
-            $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass1 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
+            if (-not(($EncodingAttempts -gt 0) -and $ReusePassLog)){
+                $FFmpegExitCode = Invoke-FFmpeg -FFmpegArgList $FFmpegArg_Pass1 -VideoDuration $TargetVideoDuration_sec -PassNumber $ProgressBarPass -UseProgressBar $UseProgressBar
+            } else { Write-Host "Reusing previous pass log file" }
+
             if ($FFmpegExitCode -ne 0) {
                 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
                 exit $FFmpegExitCode
@@ -529,8 +540,6 @@ while (1){
 
     if (($ResultingVideoSize_MiB -ge $TargetVideoSize_MiB) -and -not $PSBoundParameters.ContainsKey('TargetVideoBitrate_kbps') -and -not (-not $PSBoundParameters.ContainsKey('TargetVideoSize_MiB') -and $PSBoundParameters.ContainsKey('BitratePercentageLow'))) {
         if ($RetryEncodingIfTargetNotMet) {
-            $EndTime = Get-Date
-            $ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeAttemptStartTime).TotalSeconds, 2))
 
             Write-Warning ("Resulting file size ({0:F2} MiB) is over the target size." -f $ResultingVideoSize_MiB)
 
@@ -557,7 +566,7 @@ while (1){
 
             Remove-Item -LiteralPath $FinalOutputFile -Force -ErrorAction SilentlyContinue
 
-            Write-Host ("Attempt {0:F2} took {1:F2} seconds ({2:F2} minutes)" -f $EncodingAttempts, $ElapsedAttemptTime, $($ElapsedAttemptTime / 60))
+            Write-Host ("Attempt $EncodingAttempts took $($EncodeAttempt_Stopwatch.Elapsed.ToString('hh\:mm\:ss')) (hh:mm:ss)")
             Write-Host "=== === Attempt $($EncodingAttempts+1) === ==="
         }
         else {
@@ -572,14 +581,13 @@ while (1){
     $FFmpegArg_JustTrimming.Clear()
     $FFmpegArg_Pass1.Clear()
     $FFmpegArg_Pass2.Clear()
-} 
+}
 # End of encoding retry loop
 
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $PassLogDir
 
-$EndTime = Get-Date
-if ($EncodingAttempts -gt 1) { Write-Host ("Attempt {0:F2} took {1:F2} seconds ({2:F2} minutes)" -f $EncodingAttempts, $ElapsedAttemptTime, $($ElapsedAttemptTime / 60)) }
-$ElapsedAttemptTime = ([math]::Round(($EndTime - $EncodeTotalStartTime).TotalSeconds, 2))
-Write-Host ("Encoding took {0:F2} seconds in total ({1:F2} minutes)" -f $ElapsedAttemptTime, $($ElapsedAttemptTime / 60))
+if ($EncodingAttempts -gt 1) { Write-Host ("Attempt $EncodingAttempts took $($EncodeAttempt_Stopwatch.Elapsed.ToString('hh\:mm\:ss')) (hh:mm:ss)") }
+
+Write-Host ("Encoding took $($EncodeTotal_Stopwatch.Elapsed.ToString('hh\:mm\:ss')) (hh:mm:ss) in total")
 
 Write-Host "=== === === Video Done! === === ==="
