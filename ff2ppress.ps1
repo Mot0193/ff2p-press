@@ -50,7 +50,7 @@ param(
     $ReusePassLog = $true,
 
     [Alias("fancybar")]
-    [bool]$UseProgressBar = $true,
+    $UseProgressBar = $true,
 
     [Alias("y")]
     [int]$OverwriteFiles = 1, # If file exists, 0 = dont overwrite and exit; 1 = overwrite; 2 = ask
