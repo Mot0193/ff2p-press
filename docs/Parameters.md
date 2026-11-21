@@ -124,8 +124,7 @@ Scaling down a video can make encoding faster, of course at the cost of overall 
 `-h 736 -w 201` (nothing is stopping you from picking incorrect resolutions for the aspect ratio, but it will result in a funky looking video)
 
 ### -TargetVideoTrim (Alias: -trim)
-Set a start and end timestamp separated by "-" like so: `-trim <start_timestamp>-<end_timestamp>`, to keep that section of the video while the rest will be trimmed out.
-
+Set a start and end timestamp separated by "-" like so: `-trim <start_timestamp>-<end_timestamp>`, to keep that section of the video while the rest will be trimmed out. Equivalent to using ffmpeg's `-ss <start>` and `-to <end>`.
 Timestamps can have the following formats: 
 - Seconds 
 - MM:SS
@@ -145,11 +144,11 @@ The video bitrate will be calculated correctly to account for the changed video 
 ### -ForceVideoEncoding (bool)
 **Default:** `1`
 
-When using [-trim](Parameters.md#-targetvideotrim-alias--trim), there could be a chance that the target video bitrate will end up being higher than the starting video target. This (roughly) means trimming the video will be enough to get under the target file size without having to re-encode the video.
+When using [-trim](Parameters.md#-targetvideotrim-alias--trim), there could be a chance that the target video bitrate will end up being higher than the starting video target. This (_very_ roughly) means that trimming the video will be enough to get it under the target file size without having to re-encode the video.
 
 Enabling `ForceVideoEncoding` will always re-encode the video, even if the target video bitrate is higher than the input. Encoding may be slow, but will result in a video with no issues.
 
-Disabling `ForceVideoEncoding` will attempt to copy the video and audio codec while just trimming the video. This approach may result in a choppy video, or the start of the video may be black for a few seconds.
+Disabling `ForceVideoEncoding` will attempt to copy the video and audio codec while just trimming the video. This approach may make it so the start of the output video will be black for a few seconds.
 
 Just trimming the video may not always result in a met target size, but if you have [RetryEncodingIfTargetNotMet](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) enabled, the script will fall back to normal re-encoding to try to get the video below the target size.
 
@@ -157,7 +156,7 @@ Just trimming the video may not always result in a met target size, but if you h
 `-forcevideoencoding 0` (disable)
 
 ### -TargetVideoBitrate_kbps (Alias: -brv)
-Set a target video bitrate in kbps manually instead of letting ff2ppress calculate a video bitrate. Setting this makes the script ignore the [target size](Parameters.md#-targetvideosize_mib-alias--s) and will instead compress the input video with your desired bitrate.
+Manually set a target video bitrate in kbps instead of letting ff2ppress calculate a video bitrate. Setting this makes the script ignore the [target size](Parameters.md#-targetvideosize_mib-alias--s) and will instead compress the input video with your desired bitrate.
 
 **Usage:**\
 `-brv 1000` (this will forcefully set the video bitrate to 1000 kbps)
@@ -266,6 +265,16 @@ If this value is set to a negative number (e.g -1), the percentage will be selec
 `-retrylow 5` (each subsequent retry lowers the bitrate by 5%)\
 `-retrylow -1` (enable dynamic mode)
 
+### -ReusePassLog (bool)
+**Default:** `1`
+
+With ReusePassLog enabled, when files overshoot the target size, subsequent [retries](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) will skip the 1st pass reusing the same log file from the 1st initial pass, despite using a [lower bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow). This greatly reduces the encoding time when retrying, as (apparently) re-doing the 1st pass is not critical when changing the bitrate.
+
+Disabling ReusePassLog will always re-run the 1st pass for each retry.
+
+**Usage:**\
+`-reusepasslog 0` (always do the 1st pass when retrying)
+
 ### -UseProgressBar (Alias: -fancybar) (bool)
 **Default:** `1`
 
@@ -295,16 +304,6 @@ Enabling -nosizecheck will skip this check, and the script will target the selec
 
 **Usage:**\
 `-nosizecheck 1` (skip the input file size check)
-
-### -ReusePassLog (bool)
-**Default:** `1`
-
-With ReusePassLog enabled, when files overshoot the target size, subsequent [retries](Parameters.md#-retryencodingiftargetnotmet-alias--retry-bool) will skip the 1st pass reusing the same log file from the 1st initial pass, despite using a [lower bitrate](Parameters.md#-retryencodingpercentagelowamount-alias--retrylow). This greatly reduces the encoding time when retrying, as (apparently) re-doing the 1st pass is not critical when changing the bitrate.
-
-Disabling ReusePassLog will always re-run the 1st pass for each retry.
-
-**Usage:**\
-`-reusepasslog 0` (always do the 1st pass when retrying)
 
 ## Debug Mode (see the ffmpeg argument list before compressing)
 
@@ -351,7 +350,7 @@ ff2ppress.ps1 -i video.mp4 -filter:v "zscale=t=linear:npl=100,format=gbrpf32le,z
 
 - Your arguments will NOT be used for the "[just trimming](Parameters.md#-forcevideoencoding-bool)" argument list.
 
-- FF2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use ffmpeg's video filter parameter under the hood. You can add your own video filters just fine, and the script will merge these filters for you, though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`). If this somehow messes with your specific use case, you can of course not use ff2ppress's rescale parameters and instead add them via `-vf`.
+- FF2ppress's own [-h & -w](Parameters.md#-targetvideoheight-alias--h---targetvideowidth-alias--w) parameters use ffmpeg's video filter parameter under the hood. You can add your own video filters just fine, and the script will merge these filters for you, though the rescale args will be placed first in the filter list (for example: `-vf scale=-1:720,your=filter,example=filter`).
 
 - You cannot pass an ffmpeg argument that starts with the same letter(s) as any script parameter mentioned in this document. PowerShell will try to match that parameter to a script parameter, but will fail.\
-I haven't found an ffmpeg parameter that will both technically work with the script but can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`
+I haven't found a lot of common parameters can't be passed because of this quirk, but for example, trying to use ffmpeg's `-f` parameter will gets you the error: `... parameter name 'f' is ambiguous. Possible matches include: -fancyrename -ForceVideoEncoding -ForceAudioEncoding.`

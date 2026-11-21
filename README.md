@@ -2,14 +2,14 @@
 
 FF2ppress is a PowerShell script that uses 2-pass encoding via FFmpeg to compress videos to a target size in MiB, useful for uploading or sharing on platforms with file size limits, such as Discord.
 
-FF2ppress's main feature is customizability and control, allowing you to change advanced FFmpeg settings and parameters, such as:
+FF2ppress is highly customizable, allowing you to change advanced FFmpeg settings and parameters, such as:
 
 * Changing the [video encoder](/docs/Parameters.md#-videoencoder-alias--cv) and [preset](/docs/Parameters.md#-videoencoderpreset-alias--cvpreset);
-* [Passing parameters](/docs/Parameters.md#-encoderparameters-alias--params) to the encoder;
+* [Passing parameters](/docs/Parameters.md#-encoderparameters-alias--params) to the video encoder;
 * Specifying the [audio or video stream](/docs/Parameters.md#-inputaudiostream-alias--audiostream) of a multi-stream input file;
 * Being able to pass most [FFmpeg arguments directly](/docs/Parameters.md#passing-other-ffmpeg-arguments), which opens up the majority of FFmpeg’s functionality;
 
-This customizability tries not to sacrifice usability, and the script can be as simple or as complicated as you want it to be. It's easy to start using it, as all you need is [input video parameter](/docs/Parameters.md#-inputvideo-alias--i), and the default `libx265` and `libopus` encoders targeting 20 MiB file sizes should be satisfactory for most users out of the box. See [examples](#examples-of-usage) below!
+This customizability tries not to sacrifice usability, and the script can be as simple or as complicated as you want it to be. It's easy to start using it, as all you need is [input video parameter](/docs/Parameters.md#-inputvideo-alias--i), and the default encoders targeting 20 MiB file sizes should be satisfactory for most users out of the box. See [examples](#examples-of-usage) below!
 
 # Installation & Dependencies
 
@@ -48,17 +48,17 @@ nix profile install github:mot0193/ff2p-press
 ```
 
 # Quick Usage
-Here you can find a short list of the most common parameters and use cases. You can find a full list of [Parameters](/docs/Parameters.md) in the [docs folder](/docs/).
+Here you can find a short list of the most common parameters. You can find a full list of [Parameters](/docs/Parameters.md) in the [docs folder](/docs/).
 
 ## Common parameters
-| Parameter | Description |
-|---|---|
-|`-i <path_to_file>`| Video file input. This is the only required parameter for the script to function|
-|`-s <desired_file_size_in_MiB>`| Target size of the file in mebibytes. The default is 20 MiB, enough for the Discord file size limit|
-|`-o <folder_path>`| Output folder for the compressed video. Not setting this will output the video in the same folder as the input video|
-|`-cv <encoder>` | The encoder used for compressing the video (e.g. `libx264`). Available encoders are listed in the [Encoders](/docs/Encoders.md) documentation file.|
-|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Encoders](/docs/Encoders.md) for the preset names for each encoder. |
-|`-h <desired_resolution>`<br> or <br>`-w <desired_resolution>`| Rescale resolution. You may only use -h (height) to automatically scale the width to match the aspect ratio or vice versa (e.g. using `-h 1080` on a 2560x1440 video will result into a 1920x1080 video). Scaling down a video can make encoding faster.|
+| Parameter | Description | Default Value | 
+|---|---|---|
+|`-i <path_to_file>`| Video file input. This is the only required parameter for the script to function | none |
+|`-s <desired_file_size_in_MiB>`| Target size of the file in mebibytes. | `20` |
+|`-cv <video_encoder>` | The encoder used for compressing the video (e.g. `libx264`, `libsvtav1`). Available encoders are listed in the [Encoders.md](/docs/Encoders.md) documentation file. | `libx265` |
+|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Encoders.md](/docs/Encoders.md). | `medium` for `libx265` (depends on encoder) |
+|`-ca <audio_encoder>`| The encoder used for compressing the audio (either `aac` or `libopus`).| `libopus` |
+|`-bra <target_audio_bitrate_in_kbps>` | The target bitrate for the audio. The input file's audio bitrate will instead be used if it's lower than the target bitrate. By default, the input file's audio will be copied to the output file without re-encoding. | `128` |
 
 ## Examples of Usage
 | Example command | Explanation |
