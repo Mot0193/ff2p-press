@@ -28,7 +28,7 @@ Target size of the output video file in MiB (mebibytes).
 ### -OutputFolder (Alias: -o)
 **Default:** Same folder as the input video
 
-Path of an output folder.
+Path of an output folder. The folder must exist first, the script won't create it.
 
 **Usage:**\
 `-o  C:\Users\Mot\Desktop`\

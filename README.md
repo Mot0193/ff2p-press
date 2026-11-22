@@ -53,12 +53,13 @@ Here you can find a short list of the most common parameters. You can find a ful
 ## Common parameters
 | Parameter | Description | Default Value | 
 |---|---|---|
-|`-i <path_to_file>`| Video file input. This is the only required parameter for the script to function | none |
-|`-s <desired_file_size_in_MiB>`| Target size of the file in mebibytes. | `20` |
-|`-cv <video_encoder>` | The encoder used for compressing the video (e.g. `libx264`, `libsvtav1`). Available encoders are listed in the [Encoders.md](/docs/Encoders.md) documentation file. | `libx265` |
-|`-cvpreset <preset_for_selected_encoder>`| Preset for the selected encoder. Preset naming schemes may be different between encoders, see [Encoders.md](/docs/Encoders.md). | `medium` for `libx265` (depends on encoder) |
-|`-ca <audio_encoder>`| The encoder used for compressing the audio (either `aac` or `libopus`).| `libopus` |
-|`-bra <target_audio_bitrate_in_kbps>` | The target bitrate for the audio. The input file's audio bitrate will instead be used if it's lower than the target bitrate. By default, the input file's audio will be copied to the output file without re-encoding. | `128` |
+|`-i`| Input video file path. This is the only required parameter for the script to function | N/A |
+|`-s`| Target size of the file in mebibytes (MiB). | `20` |
+|`-o` | Output folder path for the compressed video. | same folder as the input video's |
+|`-cv` | The video encoder used for compression (e.g. `libx264`, `libsvtav1`). Available encoders are listed in the [Encoders.md](/docs/Encoders.md) documentation file. | `libx265` |
+|`-cvpreset`| Preset for the selected video encoder. Preset naming schemes may be different between encoders, see [Encoders.md](/docs/Encoders.md). | `medium` for `libx265` (depends on encoder) |
+|`-ca`| The audio encoder used for compression (either `aac` or `libopus`).| `libopus` |
+|`-bra` | The target audio bitrate in kbps. The input file's audio bitrate will instead be used if it's lower than the target bitrate, and by default, the input file's audio will be copied to the output file without re-encoding. | `128` |
 
 ## Examples of Usage
 | Example command | Explanation |
